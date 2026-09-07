@@ -35,3 +35,8 @@ Thumbs.db
 scratch/
 .system_generated/
 *.log
+
+# Web & Presentation Assets (Served via gh-pages branch)
+blog/
+docs/
+

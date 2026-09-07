@@ -226,11 +226,9 @@ Trains only the 21.66M 4D routing parameters on Apple Silicon Metal:
 caffeinate -dis python pure_latent_4d_mind/train_hybrid_4d.py --start-chunk 0
 ```
 
-### 5. Run Interactive Forward Pass Simulation (Local Blog)
-Open the interactive research blog in your browser:
-```bash
-open docs/index.html
-```
+### 5. Run Interactive Forward Pass Simulation
+Experience the live interactive simulation and architecture walkthrough directly at:
+👉 **[4D Latent Reasoning Interactive Blog](https://ombansod2.github.io/4d-latent-reasoning/)**
 
 ---
 
