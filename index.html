@@ -804,13 +804,31 @@
         }
 
         /* ==========================================================================
-           RESPONSIVE & MOBILE DESIGN SYSTEM
+           RESPONSIVE & MOBILE DESIGN SYSTEM (OVERFLOW SAFE)
            ========================================================================== */
 
-        /* Prevent unwanted horizontal overflow */
+        /* Prevent unwanted horizontal overflow globally */
         html, body {
-            max-width: 100%;
-            overflow-x: hidden;
+            width: 100%;
+            max-width: 100vw;
+            overflow-x: hidden !important;
+            position: relative;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        *, *:before, *:after {
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 3.5rem 2rem 6rem;
+            box-sizing: border-box;
+            overflow-x: clip;
         }
 
         img, svg, canvas {
@@ -820,11 +838,47 @@
 
         /* Fluid KaTeX Math rendering */
         .katex-display {
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            padding: 0.5rem 0;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+            padding: 0.4rem 0 !important;
+            max-width: 100% !important;
+            box-sizing: border-box;
+        }
+
+        .katex {
+            font-size: 1.05em;
             max-width: 100%;
+        }
+
+        /* Dedicated Responsive Table Wrapper */
+        .table-responsive {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin: 1.8rem 0;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            box-shadow: var(--card-shadow);
+            box-sizing: border-box;
+        }
+
+        .table-responsive .spec-table {
+            width: 100%;
+            min-width: 620px;
+            display: table;
+            margin: 0;
+            border: none;
+            box-shadow: none;
+            border-radius: 0;
+        }
+
+        .table-responsive .spec-table th,
+        .table-responsive .spec-table td {
+            white-space: normal !important;
+            word-break: normal;
         }
 
         /* 1. TABLET SCREENS (<= 992px) */
@@ -845,12 +899,19 @@
                 line-height: 1.75;
             }
 
+            .container {
+                padding: 1.5rem 1.1rem 4rem;
+                width: 100%;
+            }
+
             /* Sticky Header with Swipeable Quick-Nav Pills */
             .site-nav {
                 flex-direction: column;
                 align-items: stretch;
                 padding: 0.65rem 1rem 0.55rem;
                 gap: 0.5rem;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .site-nav .brand {
@@ -871,6 +932,8 @@
                 gap: 0.45rem;
                 padding: 0.15rem 0 0.35rem;
                 scrollbar-width: none;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .site-nav .toc-links::-webkit-scrollbar {
@@ -961,29 +1024,34 @@
                 padding-left: 1.25rem;
             }
 
-            /* Tables: Horizontal Scroll on touch */
-            .spec-table {
-                display: block;
-                width: 100%;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                white-space: nowrap;
-                font-size: 0.88rem;
+            /* Tables in Responsive Container */
+            .table-responsive {
+                margin: 1.5rem 0;
             }
 
-            .spec-table th, .spec-table td {
-                padding: 0.75rem 1rem;
+            .table-responsive .spec-table {
+                min-width: 580px;
+                font-size: 0.85rem;
+            }
+
+            .table-responsive .spec-table th, 
+            .table-responsive .spec-table td {
+                padding: 0.75rem 0.85rem;
             }
 
             /* Interactive Simulator: Vertical Flow */
             .interactive-container {
                 padding: 1.5rem 1.1rem;
-                margin: 2.5rem 0;
+                margin: 2rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .diagram-viewport {
                 padding: 1.75rem 0.75rem;
                 min-height: auto;
+                max-width: 100%;
+                box-sizing: border-box;
             }
 
             .diag-grid {
@@ -1015,6 +1083,8 @@
                 gap: 0.5rem;
                 padding: 1rem 1.1rem;
                 min-height: auto;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .sim-controls {
@@ -1033,6 +1103,8 @@
             .vq-sim-box {
                 padding: 1.5rem 1.1rem;
                 margin: 2rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .cluster-canvas-container {
@@ -1048,6 +1120,8 @@
             .loss-chart-container {
                 padding: 1.5rem 1rem;
                 margin: 2rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .chart-toggle-group {
@@ -1073,7 +1147,10 @@
             }
 
             .container {
-                padding: 1.2rem 0.9rem 3.5rem;
+                padding: 1.2rem 0.85rem 3.5rem;
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
             }
 
             .hero {
@@ -1106,10 +1183,12 @@
                 margin-bottom: 1.5rem;
             }
 
-            /* Code Blocks: Edge-to-Edge feel for readable code */
+            /* Code Blocks: Strict 100% width with zero negative margins */
             .code-container {
-                margin: 1.5rem -0.4rem;
+                margin: 1.4rem 0;
                 border-radius: 8px;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .code-header {
@@ -1123,19 +1202,41 @@
                 padding: 0.85rem 0.75rem;
                 font-size: 0.78rem;
                 line-height: 1.55;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            /* Tables in Responsive Container on Small Screens */
+            .table-responsive {
+                margin: 1.25rem 0;
+                border-radius: 8px;
+            }
+
+            .table-responsive .spec-table {
+                min-width: 520px;
+                font-size: 0.82rem;
+            }
+
+            .table-responsive .spec-table th,
+            .table-responsive .spec-table td {
+                padding: 0.65rem 0.75rem;
             }
 
             /* Math Blocks */
             .math-block {
                 padding: 1.1rem 0.65rem 0.85rem;
                 font-size: 0.92rem;
-                margin: 1.6rem 0;
+                margin: 1.4rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             /* Callouts & Story Boxes */
             .callout {
                 padding: 1.1rem 0.9rem;
-                margin: 1.5rem 0;
+                margin: 1.4rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .callout-title {
@@ -1144,11 +1245,15 @@
 
             .story-moment {
                 padding: 1.25rem 0.9rem;
-                margin: 1.75rem 0;
+                margin: 1.5rem 0;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .card {
                 padding: 1.25rem 0.9rem;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .btn {
@@ -1156,11 +1261,13 @@
                 font-size: 0.88rem;
             }
 
-            /* Interactive containers bleed cleanly */
+            /* Interactive containers: 100% width with zero negative margins */
             .interactive-container, .vq-sim-box, .loss-chart-container {
                 padding: 1.25rem 0.75rem;
-                margin: 2rem -0.3rem;
+                margin: 1.8rem 0;
                 border-radius: 12px;
+                width: 100%;
+                box-sizing: border-box;
             }
 
             footer {
@@ -1364,42 +1471,44 @@ dataset = load_dataset(<span class="str">"bespokelabs/Bespoke-Stratos-17k"</span
                 My entire experimental pipeline—data extraction, SVD computation, scratch training, and hybrid surgery—ran on a single compact desktop machine:
             </p>
 
-            <table class="spec-table">
-                <thead>
-                    <tr>
-                        <th>Hardware Component</th>
-                        <th>Specification &amp; Configuration</th>
-                        <th>Operational Impact</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>System Identifier</strong></td>
-                        <td><code>Mac16,11</code> (Apple Mac mini 2024)</td>
-                        <td>Compact, ultra-quiet, silent thermal envelope</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Processor (SoC)</strong></td>
-                        <td><strong>Apple M4 Pro</strong> (12 Cores: 8 Performance, 4 Efficiency)</td>
-                        <td>Massive single-thread throughput + high multi-core vector IPC</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Unified Memory (RAM)</strong></td>
-                        <td><strong>24.0 GB Unified Memory Architecture (UMA)</strong></td>
-                        <td>Zero-copy sharing between CPU and Metal GPU cores (~273 GB/s bandwidth)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Free Storage Buffer</strong></td>
-                        <td><strong>~14.0 GB</strong> on <code>/System/Volumes/Data</code></td>
-                        <td>Strict boundary condition: Large checkpoints could easily fill disk</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Software Framework</strong></td>
-                        <td><strong>Apple MLX</strong> (<code>mlx.core</code>, <code>mlx.nn</code>, <code>mlx-lm</code>)</td>
-                        <td>Native Metal compilation without CUDA abstraction overhead</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Hardware Component</th>
+                            <th>Specification &amp; Configuration</th>
+                            <th>Operational Impact</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>System Identifier</strong></td>
+                            <td><code>Mac16,11</code> (Apple Mac mini 2024)</td>
+                            <td>Compact, ultra-quiet, silent thermal envelope</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Processor (SoC)</strong></td>
+                            <td><strong>Apple M4 Pro</strong> (12 Cores: 8 Performance, 4 Efficiency)</td>
+                            <td>Massive single-thread throughput + high multi-core vector IPC</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Unified Memory (RAM)</strong></td>
+                            <td><strong>24.0 GB Unified Memory Architecture (UMA)</strong></td>
+                            <td>Zero-copy sharing between CPU and Metal GPU cores (~273 GB/s bandwidth)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Free Storage Buffer</strong></td>
+                            <td><strong>~14.0 GB</strong> on <code>/System/Volumes/Data</code></td>
+                            <td>Strict boundary condition: Large checkpoints could easily fill disk</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Software Framework</strong></td>
+                            <td><strong>Apple MLX</strong> (<code>mlx.core</code>, <code>mlx.nn</code>, <code>mlx-lm</code>)</td>
+                            <td>Native Metal compilation without CUDA abstraction overhead</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <h3>The Double-Edged Sword of Unified Memory</h3>
             <p>
@@ -1638,36 +1747,38 @@ dataset = load_dataset(<span class="str">"bespokelabs/Bespoke-Stratos-17k"</span
                 To understand why Qwen 3.5 4B is the perfect substrate for recurrent reasoning, one must inspect its internal block composition. Unlike pure Transformer architectures (like Llama 3) where every layer is a standard quadratic Multi-Head Attention layer, Qwen 3.5 uses a <strong>Hybrid Architecture</strong>:
             </p>
 
-            <table class="spec-table">
-                <thead>
-                    <tr>
-                        <th>Layer Range</th>
-                        <th>Layer Architecture</th>
-                        <th>KV-Cache Behavior</th>
-                        <th>Architectural Assignment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Layers 0 – 15</strong></td>
-                        <td>Full Attention + SwiGLU FFN (Layer 15 is Full Attention)</td>
-                        <td>Standard $O(N^2)$ causal KV-cache</td>
-                        <td><strong>Zone 1: Parse</strong> (Frozen syntax and semantic ingestion)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Layers 16 – 18</strong></td>
-                        <td><strong>Gated Delta Networks (GDN / Linear Attention)</strong></td>
-                        <td><strong>Stateless / Constant $O(1)$ State</strong></td>
-                        <td><strong>Zone 2: Recurrent Core</strong> (The 6-Iteration Thinking Loop!)</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Layers 19 – 35</strong></td>
-                        <td>Alternating Full Attention &amp; Linear Attention</td>
-                        <td>Downstream causal decoding</td>
-                        <td><strong>Zone 3: Unembed</strong> (Frozen generation to vocabulary)</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Layer Range</th>
+                            <th>Layer Architecture</th>
+                            <th>KV-Cache Behavior</th>
+                            <th>Architectural Assignment</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Layers 0 – 15</strong></td>
+                            <td>Full Attention + SwiGLU FFN (Layer 15 is Full Attention)</td>
+                            <td>Standard $O(N^2)$ causal KV-cache</td>
+                            <td><strong>Zone 1: Parse</strong> (Frozen syntax and semantic ingestion)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Layers 16 – 18</strong></td>
+                            <td><strong>Gated Delta Networks (GDN / Linear Attention)</strong></td>
+                            <td><strong>Stateless / Constant $O(1)$ State</strong></td>
+                            <td><strong>Zone 2: Recurrent Core</strong> (The 6-Iteration Thinking Loop!)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Layers 19 – 35</strong></td>
+                            <td>Alternating Full Attention &amp; Linear Attention</td>
+                            <td>Downstream causal decoding</td>
+                            <td><strong>Zone 3: Unembed</strong> (Frozen generation to vocabulary)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <div class="callout callout-amber">
                 <div class="callout-title">⚡ Why Full Attention Breaks Recurrent Loops</div>
@@ -1684,58 +1795,63 @@ dataset = load_dataset(<span class="str">"bespokelabs/Bespoke-Stratos-17k"</span
                 In standard transformer design, activation functions are often treated as interchangeable defaults (e.g., swapping GELU for SiLU). In my recurrent hybrid architecture, however, every activation function was selected with deliberate mathematical intent to prevent non-linear divergence across 6 recurrent thinking loops:
             </p>
 
-            <table class="spec-table">
-                <thead>
-                    <tr>
-                        <th>Component</th>
-                        <th>Activation Function</th>
-                        <th>Mathematical Formula</th>
-                        <th>Critical Architectural Rationale</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>4D Router</strong></td>
-                        <td><strong>Temperature-Scaled Sigmoid</strong></td>
-                        <td>$$\sigma(z / \tau) = \frac{1}{1 + e^{-z / \tau}}$$</td>
-                        <td>
-                            Maps unbounded continuous activations $h \in \mathbb{R}^{2560}$ into the bounded 4D unit hypercube $[0, 1]^4$.
-                            <br><br>
-                            The learnable temperature $\tau$ (clamped to $[0.1, 10.0]$) governs the dispersion: at $\tau = 1.0$, it produces smooth gradients across the hypercube interior; as training matures and entropy loss is minimized, it sharpens coordinates toward the 16 hypercube vertices $\{0, 1\}^4$, creating distinct topological routing buckets.
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><strong>FiLM Modulation</strong></td>
-                        <td><strong>Bounded Hyperbolic Tangent ($\tanh$)</strong></td>
-                        <td>$$\gamma = 1 + 0.1 \tanh(W_\gamma c + b_\gamma)$$ $$\beta = 0.1 \tanh(W_\beta c + b_\beta)$$</td>
-                        <td>
-                            <strong>Mitigating the Compounding Recurrence Hazard:</strong> In standard feed-forward networks, linear FiLM modulation $h \odot \gamma + \beta$ is applied once. But in my 6-iteration recurrent loop, an unconstrained multiplier compounds exponentially:
-                            $$h_6 \approx h_0 \cdot \prod_{i=1}^6 \gamma_i$$
-                            If $\gamma \approx 1.4$, after 6 loops $1.4^6 \approx 7.5\times$ (activation explosion). If $\gamma \approx 0.6$, $0.6^6 \approx 0.046\times$ (signal vanishing).
-                            <br><br>
-                            By wrapping in $0.1 \tanh(\cdot)$, $\gamma$ is strictly bounded within $[0.9, 1.1]$ and $\beta \in [-0.1, 0.1]$. Each recurrent loop can only perturb representations by at most $\pm 10\%$, guaranteeing asymptotic numerical stability.
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><strong>FiLMSwiGLU &amp; FFNs</strong></td>
-                        <td><strong>SiLU (Swish)</strong></td>
-                        <td>$$\text{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}$$</td>
-                        <td>
-                            Powers the SwiGLU gating mechanism: $\text{SwiGLU}(x) = (x W_{\text{gate}} \cdot \sigma(x W_{\text{gate}})) \odot (x W_{\text{up}}) W_{\text{down}}$.
-                            <br><br>
-                            Unlike ReLU, SiLU is smooth, non-monotonic, and retains non-zero gradients for slightly negative inputs ($x \in [-1, 0]$), preventing dead neurons during deep backpropagation through time.
-                        </td>
-                    </tr>
-                    <tr>
-                        <td><strong>Layer Normalization</strong></td>
-                        <td><strong>RMSNorm</strong></td>
-                        <td>$$\bar{a} = \frac{a}{\sqrt{\frac{1}{d}\sum_{i=1}^d a_i^2 + \epsilon}} \odot g$$</td>
-                        <td>
-                            Enforces scale invariance across layers without the computational overhead of mean-centering subtraction. On Apple Silicon Metal shaders, eliminating the mean reduction step reduces kernel dispatch latency by ~18%.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="spec-table">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Activation Function</th>
+                            <th>Mathematical Formula</th>
+                            <th>Critical Architectural Rationale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>4D Router</strong></td>
+                            <td><strong>Temperature-Scaled Sigmoid</strong></td>
+                            <td>$$\sigma(z / \tau) = \frac{1}{1 + e^{-z / \tau}}$$</td>
+                            <td>
+                                Maps unbounded continuous activations $h \in \mathbb{R}^{2560}$ into the bounded 4D unit hypercube $[0, 1]^4$.
+                                <br><br>
+                                The learnable temperature $\tau$ (clamped to $[0.1, 10.0]$) governs the dispersion: at $\tau = 1.0$, it produces smooth gradients across the hypercube interior; as training matures and entropy loss is minimized, it sharpens coordinates toward the 16 hypercube vertices $\{0, 1\}^4$, creating distinct topological routing buckets.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>FiLM Modulation</strong></td>
+                            <td><strong>Bounded Hyperbolic Tangent ($\tanh$)</strong></td>
+                            <td>
+                                $$\gamma = 1 + 0.1 \tanh(W_\gamma c + b_\gamma)$$
+                                $$\beta = 0.1 \tanh(W_\beta c + b_\beta)$$
+                            </td>
+                            <td>
+                                <strong>Mitigating the Compounding Recurrence Hazard:</strong> In standard feed-forward networks, linear FiLM modulation $h \odot \gamma + \beta$ is applied once. But in my 6-iteration recurrent loop, an unconstrained multiplier compounds exponentially:
+                                $$h_6 \approx h_0 \cdot \prod_{i=1}^6 \gamma_i$$
+                                If $\gamma \approx 1.4$, after 6 loops $1.4^6 \approx 7.5\times$ (activation explosion). If $\gamma \approx 0.6$, $0.6^6 \approx 0.046\times$ (signal vanishing).
+                                <br><br>
+                                By wrapping in $0.1 \tanh(\cdot)$, $\gamma$ is strictly bounded within $[0.9, 1.1]$ and $\beta \in [-0.1, 0.1]$. Each recurrent loop can only perturb representations by at most $\pm 10\%$, guaranteeing asymptotic numerical stability.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>FiLMSwiGLU &amp; FFNs</strong></td>
+                            <td><strong>SiLU (Swish)</strong></td>
+                            <td>$$\text{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}$$</td>
+                            <td>
+                                Powers the SwiGLU gating mechanism: $\text{SwiGLU}(x) = (x W_{\text{gate}} \cdot \sigma(x W_{\text{gate}})) \odot (x W_{\text{up}}) W_{\text{down}}$.
+                                <br><br>
+                                Unlike ReLU, SiLU is smooth, non-monotonic, and retains non-zero gradients for slightly negative inputs ($x \in [-1, 0]$), preventing dead neurons during deep backpropagation through time.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Layer Normalization</strong></td>
+                            <td><strong>RMSNorm</strong></td>
+                            <td>$$\bar{a} = \frac{a}{\sqrt{\frac{1}{d}\sum_{i=1}^d a_i^2 + \epsilon}} \odot g$$</td>
+                            <td>
+                                Enforces scale invariance across layers without the computational overhead of mean-centering subtraction. On Apple Silicon Metal shaders, eliminating the mean reduction step reduces kernel dispatch latency by ~18%.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
                         <h3>The Anatomy of the 4D Router &amp; FiLM Modulation</h3>
             <p>
@@ -2253,10 +2369,11 @@ Status: FATAL OUT-OF-BOUNDS INDEX!</code></pre>
 
             const isStacked = (rRouter.top > rZ1.bottom - 5);
 
-            const getRight = r => ({ x: r.right - vp.left, y: r.top - vp.top + r.height / 2 });
-            const getLeft = r => ({ x: r.left - vp.left, y: r.top - vp.top + r.height / 2 });
-            const getBottom = r => ({ x: r.left - vp.left + r.width / 2, y: r.bottom - vp.top });
-            const getTop = r => ({ x: r.left - vp.left + r.width / 2, y: r.top - vp.top });
+            const clampX = x => Math.max(8, Math.min(vp.width - 8, x));
+            const getRight = r => ({ x: clampX(r.right - vp.left), y: r.top - vp.top + r.height / 2 });
+            const getLeft = r => ({ x: clampX(r.left - vp.left), y: r.top - vp.top + r.height / 2 });
+            const getBottom = r => ({ x: clampX(r.left - vp.left + r.width / 2), y: r.bottom - vp.top });
+            const getTop = r => ({ x: clampX(r.left - vp.left + r.width / 2), y: r.top - vp.top });
 
             if (!isStacked) {
                 // Desktop horizontal layout
