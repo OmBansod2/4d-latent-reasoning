@@ -1,0 +1,37 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+venv_4d/
+.venv/
+ENV/
+
+# Large Model Weights and Checkpoints
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.npz
+*.pkl
+Qwen3.5-4B/
+Qwen3.8-27B/
+
+# OS Specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE & Scratch
+.vscode/
+.idea/
+scratch/
+.system_generated/
+*.log

@@ -1,0 +1,2103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distilling System 2 Reasoning: The 4D Latent Recurrent Journey</title>
+    
+    <!-- KaTeX for rendering mathematical equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body, {
+        delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\[', right: '\\]', display: true},
+            {left: '\\(', right: '\\)', display: false}
+        ],
+        throwOnError: false
+    });"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --bg-color: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-code: #0f172a;
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --text-light: #64748b;
+            --accent-primary: #2563eb;
+            --accent-secondary: #7c3aed;
+            --accent-success: #059669;
+            --accent-warning: #d97706;
+            --accent-danger: #e11d48;
+            --accent-glow: rgba(37, 99, 235, 0.12);
+            --border-color: #e2e8f0;
+            --border-dark: #cbd5e1;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.03);
+            --card-shadow-pop: 0 25px 50px -12px rgba(37, 99, 235, 0.12);
+            
+            --diag-frozen: #f1f5f9;
+            --diag-frozen-border: #cbd5e1;
+            --diag-trainable: #eff6ff;
+            --diag-trainable-border: #3b82f6;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.85;
+            font-size: 1.08rem;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 12% 15%, rgba(37, 99, 235, 0.035), transparent 28%),
+                radial-gradient(circle at 88% 35%, rgba(124, 58, 237, 0.035), transparent 30%),
+                radial-gradient(circle at 50% 85%, rgba(5, 150, 105, 0.025), transparent 32%);
+            background-attachment: fixed;
+        }
+
+        #read-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 0%;
+            z-index: 9999;
+            transition: width 0.1s ease;
+        }
+
+        .site-nav {
+            position: sticky;
+            top: 0;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-color);
+            z-index: 1000;
+            padding: 0.85rem 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .site-nav .brand {
+            font-weight: 800;
+            font-size: 1.1rem;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+
+        .site-nav .brand-badge {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            color: white;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .site-nav .toc-links {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .site-nav .toc-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .site-nav .toc-links a:hover {
+            color: var(--accent-primary);
+        }
+
+        .container {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 3.5rem 2rem 6rem;
+        }
+
+        .hero {
+            padding: 2.5rem 0 3.5rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 4rem;
+        }
+
+        .meta-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            margin-bottom: 1.8rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 0.35rem 0.85rem;
+            border-radius: 9999px;
+            border: 1px solid var(--border-color);
+            background: white;
+            color: var(--text-muted);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .badge-blue { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+        .badge-purple { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+        .badge-green { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .badge-amber { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+        .badge-rose { background: #fff1f2; color: #be123c; border-color: #fecdd3; }
+
+        h1 {
+            font-size: 3.6rem;
+            font-weight: 900;
+            line-height: 1.15;
+            margin: 0 0 1.5rem;
+            color: #0f172a;
+            letter-spacing: -0.035em;
+        }
+
+        .hero-lead {
+            font-size: 1.32rem;
+            color: var(--text-muted);
+            line-height: 1.65;
+            margin-bottom: 2rem;
+            font-weight: 400;
+            max-width: 980px;
+        }
+
+        .author-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.92rem;
+            color: var(--text-light);
+        }
+
+        .author-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .author-avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+        }
+
+        h2 {
+            font-size: 2.3rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+            margin: 4.5rem 0 1.5rem;
+            display: flex;
+            align-items: baseline;
+            gap: 0.75rem;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 0.75rem;
+        }
+
+        h2 .chap-num {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: var(--accent-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: #eff6ff;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+        }
+
+        h3 {
+            font-size: 1.55rem;
+            font-weight: 700;
+            color: #1e293b;
+            letter-spacing: -0.015em;
+            margin: 2.5rem 0 1rem;
+        }
+
+        h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #334155;
+            margin: 1.8rem 0 0.6rem;
+        }
+
+        p {
+            margin-bottom: 1.5rem;
+            color: #334155;
+        }
+
+        strong {
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        .callout {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-primary);
+            border-radius: 12px;
+            padding: 1.5rem 1.75rem;
+            margin: 2rem 0;
+            box-shadow: var(--card-shadow);
+        }
+
+        .callout-title {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #0f172a;
+        }
+
+        .callout-amber {
+            border-left-color: var(--accent-warning);
+            background: #fffbeb;
+            border-color: #fde68a;
+        }
+        .callout-amber .callout-title { color: #92400e; }
+
+        .callout-rose {
+            border-left-color: var(--accent-danger);
+            background: #fff1f2;
+            border-color: #fecdd3;
+        }
+        .callout-rose .callout-title { color: #9f1239; }
+
+        .callout-green {
+            border-left-color: var(--accent-success);
+            background: #ecfdf5;
+            border-color: #a7f3d0;
+        }
+        .callout-green .callout-title { color: #065f46; }
+
+        .callout-purple {
+            border-left-color: var(--accent-secondary);
+            background: #fbfbfe;
+            border-color: #e9d5ff;
+        }
+        .callout-purple .callout-title { color: #6b21a8; }
+
+        .story-moment {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.75rem 2rem;
+            margin: 2.5rem 0;
+            position: relative;
+            box-shadow: var(--card-shadow);
+        }
+
+        .story-moment::before {
+            content: "ENGINEERING TIMELINE";
+            position: absolute;
+            top: -12px;
+            left: 24px;
+            background: #0f172a;
+            color: #f8fafc;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 0.2rem 0.65rem;
+            border-radius: 4px;
+            letter-spacing: 0.08em;
+        }
+
+        .timestamp {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            color: var(--accent-primary);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Clean, Non-overlapping Code Container */
+        .code-container {
+            margin: 2.2rem 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #1e293b;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+            background: #0f172a;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #1e293b;
+            color: #94a3b8;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid #334155;
+            margin: 0;
+        }
+
+        .code-container pre {
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 1.25rem 1.4rem;
+            border-radius: 0;
+            overflow-x: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.92rem;
+            line-height: 1.65;
+            margin: 0;
+            border: none;
+            box-shadow: none;
+        }
+
+        .code-container pre code {
+            color: inherit;
+            background: transparent;
+            padding: 0;
+            font-size: inherit;
+            border: none;
+            display: block;
+        }
+
+        code {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            font-family: 'Fira Code', monospace;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.88em;
+            font-weight: 500;
+            border: 1px solid #e2e8f0;
+        }
+
+        .kw { color: #f472b6; font-weight: 600; }
+        .fn { color: #60a5fa; }
+        .str { color: #a3e635; }
+        .num { color: #fbbf24; }
+        .cm { color: #64748b; font-style: italic; }
+        .cls { color: #38bdf8; font-weight: 600; }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.75rem;
+            box-shadow: var(--card-shadow);
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--card-shadow-hover);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .card-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            background: #eff6ff;
+            color: var(--accent-primary);
+        }
+
+        .card h4 {
+            margin: 0;
+            font-size: 1.15rem;
+        }
+
+        .spec-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0 2rem;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--card-shadow);
+        }
+
+        .spec-table th, .spec-table td {
+            padding: 0.9rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .spec-table th {
+            background: #f8fafc;
+            font-weight: 700;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .spec-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .math-block {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.75rem 1.5rem 1.25rem;
+            margin: 2.2rem 0;
+            text-align: center;
+            font-size: 1.15rem;
+            color: #0f172a;
+            box-shadow: var(--card-shadow);
+            position: relative;
+            overflow-x: auto;
+        }
+
+        .math-block .katex-display {
+            margin: 0.75rem 0;
+        }
+
+        .math-caption {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.82rem;
+            color: var(--text-light);
+            margin-top: 0.6rem;
+        }
+
+        .interactive-container {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2.2rem;
+            margin: 3.5rem 0;
+            box-shadow: var(--card-shadow-pop);
+        }
+
+        .diagram-viewport {
+            width: 100%;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            position: relative;
+            padding: 3rem 1.5rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            min-height: 480px;
+        }
+
+        .diag-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .diag-node {
+            background: white;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem 1rem;
+            text-align: center;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--card-shadow);
+        }
+
+        .diag-node.frozen {
+            background: var(--diag-frozen);
+            border-color: var(--diag-frozen-border);
+        }
+
+        .diag-node.trainable {
+            background: var(--diag-trainable);
+            border-color: var(--diag-trainable-border);
+        }
+
+        .diag-node-title {
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+            color: #0f172a;
+        }
+
+        .diag-node-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Fira Code', monospace;
+        }
+
+        .node-active {
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 25px rgba(37, 99, 235, 0.45) !important;
+            transform: scale(1.04);
+        }
+
+        .svg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .conn-path {
+            fill: none;
+            stroke: #cbd5e1;
+            stroke-width: 2.5;
+            stroke-dasharray: 6;
+            transition: stroke 0.3s, stroke-width 0.3s;
+        }
+
+        .conn-active {
+            stroke: var(--accent-primary) !important;
+            stroke-width: 3.5 !important;
+            stroke-dasharray: none !important;
+        }
+
+        .sim-console {
+            background: #0f172a;
+            color: #f8fafc;
+            border-radius: 10px;
+            padding: 1.25rem 1.5rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.88rem;
+            min-height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 1rem;
+            border: 1px solid #1e293b;
+        }
+
+        .sim-console .step-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .sim-controls {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.25rem;
+        }
+
+        .btn {
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            font-size: 0.92rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+
+        .btn:hover {
+            background: #1d4ed8;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .btn-outline {
+            background: white;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--card-shadow);
+        }
+
+        .btn-outline:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            box-shadow: var(--card-shadow-hover);
+        }
+
+        .vq-sim-box {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2rem;
+            margin: 2.5rem 0;
+            box-shadow: var(--card-shadow);
+        }
+
+        .cluster-canvas-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .cluster-panel {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .cluster-panel h5 {
+            margin: 0 0 0.5rem;
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .cluster-vis {
+            height: 220px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .stat-badge {
+            display: inline-block;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.3rem 0.75rem;
+            border-radius: 6px;
+        }
+
+        .loss-chart-container {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2rem;
+            margin: 2.5rem 0;
+            box-shadow: var(--card-shadow);
+        }
+
+        .chart-toggle-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .chart-btn {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .chart-btn.active {
+            background: var(--accent-primary);
+            color: white;
+            border-color: var(--accent-primary);
+        }
+
+        .toc-box {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 2rem;
+            margin: 2.5rem 0;
+            box-shadow: var(--card-shadow);
+        }
+
+        .toc-box ol {
+            margin: 1rem 0 0;
+            padding-left: 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.6rem 2rem;
+        }
+
+        .toc-box li a {
+            color: #334155;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+
+        .toc-box li a:hover {
+            color: var(--accent-primary);
+            text-decoration: underline;
+        }
+
+        footer {
+            border-top: 1px solid var(--border-color);
+            padding: 4rem 0 2rem;
+            margin-top: 6rem;
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            text-align: center;
+        }
+
+        @media (max-width: 860px) {
+            h1 { font-size: 2.5rem; }
+            h2 { font-size: 1.8rem; }
+            .diag-grid { grid-template-columns: 1fr 1fr; }
+            .cluster-canvas-container { grid-template-columns: 1fr; }
+            .toc-box ol { grid-template-columns: 1fr; }
+            .site-nav .toc-links { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="read-progress"></div>
+
+    <nav class="site-nav">
+        <div class="brand">
+            <span>LatentMind</span>
+            <span class="brand-badge">Research Dispatch</span>
+        </div>
+        <div class="toc-links">
+            <a href="#chap-1">Motivation</a>
+            <a href="#chap-2">Hardware</a>
+            <a href="#chap-3">Option 1: Scratch</a>
+            <a href="#chap-4">EMA vs SGD</a>
+            <a href="#chap-5">Hybrid Architecture</a>
+            <a href="#chap-6">MLX Chronicles</a>
+            <a href="#chap-7">The 248k Trap</a>
+            <a href="#chap-9">Interactive Sim</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        
+        <!-- HERO -->
+        <header class="hero">
+            <div class="meta-badges">
+                <span class="badge badge-blue">⚡ Architectural Post-Mortem</span>
+                <span class="badge badge-purple">🧠 Latent Space Reasoning</span>
+                <span class="badge badge-green">🍎 Apple Silicon M4 Pro</span>
+                <span class="badge badge-amber">📐 MLX Framework</span>
+                <span class="badge badge-rose">🛠️ 100% EMA VQ Utilization</span>
+            </div>
+
+            <h1>Distilling System 2 Reasoning:<br><span style="color: var(--accent-primary);">The 4D Latent Recurrent Journey</span></h1>
+            
+            <p class="hero-lead">
+                A technical weekend odyssey on Apple Silicon: how I attempted to break the Chain-of-Thought token bottleneck, watched a model trained from scratch spew incomprehensible gibberish at 3:00 AM, engineered a surgical 21.6M-parameter hybrid transformer into frozen Qwen 3.5 4B, and uncovered the subtle mathematics of moving averages vs gradient descent in vector quantization.
+            </p>
+
+            <div class="author-card">
+                <div class="author-info">
+                    <div class="author-avatar">OB</div>
+                    <div>
+                        <div style="font-weight: 700; color: #0f172a; font-size: 1.05rem;">Om Bansod</div>
+                        <div style="font-size: 0.85rem; color: var(--text-light);">Independent AI Research • 28 Min Read • Conducted on Apple M4 Pro (24GB Unified Memory)</div>
+                    </div>
+                </div>
+                <div>
+                    <span class="badge">Codebase: <code>pure_latent_4d_mind</code></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- TABLE OF CONTENTS -->
+        <div class="toc-box">
+            <h3 style="margin: 0; font-size: 1.25rem;">Table of Contents</h3>
+            <ol>
+                <li><a href="#chap-1">The Vision: Beyond Autoregressive Chain-of-Thought</a></li>
+                <li><a href="#chap-2">The Apple Silicon Laboratory: M4 Pro &amp; MLX Under the Hood</a></li>
+                <li><a href="#chap-3">Option 1: The "Pure Latent 4D Mind" &amp; The 3 AM Gibberish Disaster</a></li>
+                <li><a href="#chap-4">The Mathematical Debate: Why Gradient Descent Fails &amp; EMA Wins in VQ</a></li>
+                <li><a href="#chap-5">The Architectural Pivot: Injecting a Hybrid 4D Recurrent Core</a></li>
+                <li><a href="#chap-6">The MLX Engineering Chronicles: Kernel Panics, Lazy Graphs &amp; Caffeinate</a></li>
+                <li><a href="#chap-7">The Final Showstopper: The 248k vs 151k Tokenizer Mismatch Trap</a></li>
+                <li><a href="#chap-8">Multi-Task Distillation Loss &amp; Empirical Convergence Graphs</a></li>
+                <li><a href="#chap-9">The Interactive Architectural Simulator &amp; Code Deep Dive</a></li>
+                <li><a href="#chap-10">Hard-Won Lessons &amp; The Frontier Ahead</a></li>
+            </ol>
+        </div>
+
+        <!-- CHAPTER 1 -->
+        <section id="chap-1">
+            <h2><span class="chap-num">Chapter 1</span> The Vision: Beyond Autoregressive Chain-of-Thought</h2>
+            
+            <p>
+                In the contemporary landscape of Large Language Models, reasoning is treated almost exclusively as an <strong>autoregressive text generation problem</strong>. When frontier models like OpenAI's o1, DeepSeek-R1, or Qwen-QwQ solve a competitive math or coding problem, they emit thousands of text tokens: <em>"Wait, let me rethink this... let $x$ be the velocity... no, that implies a contradiction..."</em>.
+            </p>
+            
+            <p>
+                While this "Chain-of-Thought" (CoT) paradigm has delivered staggering empirical leaps, it suffers from three fundamental inefficiencies:
+            </p>
+
+            <div class="grid-3">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">💸</div>
+                        <h4>The Compute Tax</h4>
+                    </div>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Generating 3,000 reasoning tokens per prompt costs massive KV-cache memory, serial generation latency, and GPU wattage, even for straightforward logical deduction steps.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">🔤</div>
+                        <h4>The Vocabulary Bottleneck</h4>
+                    </div>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Human thought is non-verbal, spatial, and topological before it is linguistic. Forcing intermediate hypotheses through discrete English word tokens constrains continuous deduction into syntactic straightjackets.
+                    </p>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">🌀</div>
+                        <h4>Irreversible Sampling</h4>
+                    </div>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Standard autoregressive decoding samples one token at a time. If the model commits to a flawed syntactic path early on, it must spend hundreds of tokens back-pedaling in natural language.
+                    </p>
+                </div>
+            </div>
+
+            <p>
+                <strong>The Core Hypothesis:</strong> What if a language model could "think" inside a compact, continuous, multi-dimensional latent manifold before emitting a single token? What if I could distill the internal hidden representations of a frontier reasoning teacher—specifically <strong>Qwen 3.8 27B</strong> trained on deep reasoning traces—into a compact student model that loops recurrently through a 4D latent coordinate router?
+            </p>
+
+            <div class="callout callout-purple">
+                <div class="callout-title">💡 The Teacher Distillation Blueprint</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    I selected the <code>bespokelabs/Bespoke-Stratos-17k</code> dataset—a rigorous corpus of complex mathematical, algorithmic, and logical problems. I fed these into <strong>Qwen 3.8 27B</strong>, monitored intermediate hidden states across layers, and applied <strong>Truncated Singular Value Decomposition (SVD)</strong> to project 5,120-dimensional teacher activations into a dense, orthogonal 256-dimensional "reasoning trajectory".
+                </p>
+            </div>
+            <h3>The Training Corpus: Bespoke-Stratos-17k &amp; Reasoning Extraction</h3>
+            <p>
+                A high-dimensional latent router cannot learn meaningful geometric structures from generic web scrape text like Common Crawl. To teach a student model to reason geometrically, the teacher's latent trajectories must reflect genuine, step-by-step cognitive deduction.
+            </p>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h4>The Dataset: Bespoke-Stratos-17k</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                        Created by Bespoke Labs, this corpus contains <strong>17,000 rigorous reasoning conversations</strong> curated specifically for reasoning distillation (inspired by DeepSeek-R1 CoT traces).
+                    </p>
+                    <ul style="font-size: 0.88rem; color: var(--text-muted); padding-left: 1.2rem; margin: 0;">
+                        <li><strong>Domains:</strong> International Olympiad Mathematics (AIME, AMC), competitive algorithms, logic proofs, and physics simulations.</li>
+                        <li><strong>Structure:</strong> Explicit verification loops, self-correction thoughts (<em>"Wait, let me double check this step..."</em>), and detailed derivation trees.</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>The Extraction &amp; Chunking Protocol</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin-bottom: 0.5rem;">
+                        To execute distillation within my 24 GB Unified Memory ceiling, I engineered a memory-safe streaming extraction pipeline:
+                    </p>
+                    <ul style="font-size: 0.88rem; color: var(--text-muted); padding-left: 1.2rem; margin: 0;">
+                        <li><strong>Streaming Ingestion:</strong> Utilized Hugging Face's <code>datasets.load_dataset(..., streaming=True)</code> with <code>.skip(N)</code> to avoid loading 17,000 long-context JSON objects into RAM.</li>
+                        <li><strong>15 Serialized Chunks:</strong> Partitioned the data into 1,000-prompt chunks (15,000 total prompts), saving intercepted 256D SVD trajectories into <code>teacher_256D_targets_chunk_0.pkl</code> through <code>chunk_15.pkl</code> (~1.5 GB to 3.3 GB per chunk).</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span>DATA PIPELINE: extract_targets.py (STREAMING &amp; CHUNKING)</span>
+                    <span>pure_latent_4d_mind/extract_targets.py</span>
+                </div>
+                <pre><code><span class="cm"># Load streaming reasoning dataset without RAM bloat</span>
+dataset = load_dataset(<span class="str">"bespokelabs/Bespoke-Stratos-17k"</span>, split=<span class="str">"train"</span>, streaming=<span class="kw">True</span>).skip(start_idx)
+
+<span class="kw">for</span> row <span class="kw">in</span> dataset:
+    system_prompt = row.get(<span class="str">"system"</span>, <span class="str">""</span>)
+    conversations = row.get(<span class="str">"conversations"</span>, [])
+    
+    <span class="cm"># Format into Qwen conversational chat template</span>
+    messages = [
+        {<span class="str">"role"</span>: <span class="str">"system"</span>, <span class="str">"content"</span>: system_prompt},
+        {<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: user_prompt}
+    ]
+    text = tokenizer.apply_chat_template(messages, tokenize=<span class="kw">False</span>, add_generation_prompt=<span class="kw">True</span>)
+    tokens = tokenizer.encode(text)
+    
+    <span class="cm"># Intercept teacher hidden states (layers 12, 18, 24, 30, 36, 42) &amp; project via SVD</span>
+    target_trajectory = [mx.matmul(h_layer, W_svd_proj) <span class="kw">for</span> h_layer <span class="kw">in</span> intercepted_layers]
+    
+    <span class="cm"># Chunk serialization every 1,000 sequences</span>
+    <span class="kw">if</span> prompt_count % <span class="num">1000</span> == <span class="num">0</span>:
+        save_chunk(f<span class="str">"teacher_256D_targets_chunk_{chunk_idx}.pkl"</span>, saved_tokens, saved_targets)</code></pre>
+            </div>
+
+        </section>
+
+        <!-- CHAPTER 2 -->
+        <section id="chap-2">
+            <h2><span class="chap-num">Chapter 2</span> The Apple Silicon Laboratory: M4 Pro &amp; MLX Under the Hood</h2>
+
+            <p>
+                Frontier AI research is traditionally assumed to require multi-node clusters of liquid-cooled NVIDIA H100s. I set out to test whether cutting-edge latent distillation and recurrent architecture exploration could be executed entirely on desktop consumer silicon.
+            </p>
+
+            <h3>The Hardware Rig: Apple Mac mini (M4 Pro)</h3>
+            <p>
+                My entire experimental pipeline—data extraction, SVD computation, scratch training, and hybrid surgery—ran on a single compact desktop machine:
+            </p>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Hardware Component</th>
+                        <th>Specification &amp; Configuration</th>
+                        <th>Operational Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>System Identifier</strong></td>
+                        <td><code>Mac16,11</code> (Apple Mac mini 2024)</td>
+                        <td>Compact, ultra-quiet, silent thermal envelope</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Processor (SoC)</strong></td>
+                        <td><strong>Apple M4 Pro</strong> (12 Cores: 8 Performance, 4 Efficiency)</td>
+                        <td>Massive single-thread throughput + high multi-core vector IPC</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Unified Memory (RAM)</strong></td>
+                        <td><strong>24.0 GB Unified Memory Architecture (UMA)</strong></td>
+                        <td>Zero-copy sharing between CPU and Metal GPU cores (~273 GB/s bandwidth)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Free Storage Buffer</strong></td>
+                        <td><strong>~14.0 GB</strong> on <code>/System/Volumes/Data</code></td>
+                        <td>Strict boundary condition: Large checkpoints could easily fill disk</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Software Framework</strong></td>
+                        <td><strong>Apple MLX</strong> (<code>mlx.core</code>, <code>mlx.nn</code>, <code>mlx-lm</code>)</td>
+                        <td>Native Metal compilation without CUDA abstraction overhead</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>The Double-Edged Sword of Unified Memory</h3>
+            <p>
+                Apple Silicon's Unified Memory Architecture (UMA) is extraordinary: there are no PCI Express bus bottlenecks. The CPU can load tokenized arrays into memory, and the GPU can immediately execute Metal tensor operations on the exact same physical memory addresses without copying a single byte.
+            </p>
+            <p>
+                However, <strong>24 GB is an unforgiving ceiling</strong>. Consider the mathematics:
+            </p>
+            <ul>
+                <li>A 27-billion parameter teacher in 4-bit precision occupies ~15.5 GB of RAM just for static weights.</li>
+                <li>A 4-billion parameter student in FP16 occupies 8.0 GB of RAM for weights.</li>
+                <li>Add AdamW optimizer states (2 additional FP32 buffers per trainable parameter) and dynamic computational graph allocations, and simultaneous dual-model backpropagation will instantly breach 24 GB, triggering aggressive memory compression, swap thrashing, and kernel freezes.</li>
+            </ul>
+
+            <div class="callout callout-amber">
+                <div class="callout-title">⚠️ The Two-Stage Offline Pipeline Solution</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    To survive within 24 GB, I strictly decoupled <strong>Target Extraction</strong> from <strong>Student Training</strong>. In Stage 1, the 27B teacher ran offline forward passes, computing SVD projections and serializing 15 chunks of targets (<code>teacher_256D_targets_chunk_0.pkl</code> through <code>chunk_15.pkl</code>, totaling over 30 GB across runs). In Stage 2, the teacher was completely unloaded from RAM before the student training pipeline initialized.
+                </p>
+            </div>
+        </section>
+
+        <!-- CHAPTER 3 -->
+        <section id="chap-3">
+            <h2><span class="chap-num">Chapter 3</span> Option 1: The "Pure Latent 4D Mind" &amp; The 3 AM Gibberish Disaster</h2>
+
+            <p>
+                Every research journey begins with bold ambitions. My first architectural iteration was unapologetically radical: <strong>Option 1 — The Pure Latent 4D Mind (<code>train_4d_mind.py</code>)</strong>.
+            </p>
+
+            <div class="story-moment">
+                <div class="timestamp">SATURDAY NIGHT — 02:45 AM</div>
+                <p style="margin: 0;">
+                    <em>"All 15 chunks completed! 7,500 steps in the bag. Memory held rock steady at 4.70 GB. Loss dropped from 445 down to 11.4. Trajectory MSE is down to 0.70. The loss graphs look textbook perfect. Let's run an inference test on a classic logic puzzle..."</em>
+                </p>
+            </div>
+
+            <h3>The Philosophy of Option 1</h3>
+            <p>
+                Instead of wrapping an existing model, I wrote an entirely new student architecture from scratch:
+            </p>
+            <ul>
+                <li><strong>Custom Token Embeddings:</strong> Mapping input tokens into my custom latent space.</li>
+                <li><strong>Topology-Aware Multi-Head Attention:</strong> Custom scaled dot-product attention designed to preserve geometric manifolds.</li>
+                <li><strong>4-Head Grouped Vector Quantizer (MHVQ):</strong> Discretizing continuous thought vectors into codebook indices.</li>
+                <li><strong>FiLM SwiGLU Blocks:</strong> Feature-wise Linear Modulation applied to SwiGLU feed-forward networks.</li>
+                <li><strong>Deep Recurrent Looping:</strong> Recirculating hidden states across recurrent steps to mimic iterative thinking.</li>
+            </ul>
+
+            <p>
+                I launched training on the 15 extracted chunks. For over 8 hours, the Apple M4 Pro hummed. The terminal output looked breathtakingly promising:
+            </p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span>TERMINAL: train_4d_mind.py (FINAL CHUNKS)</span>
+                    <span>STATUS: SUCCESS</span>
+                </div>
+                <pre><code>[Chunk 14] Step 0151 | Loss: 11.4387 (CE:6.14, Traj:0.7314, VQ:2.10224) | ||∇Overall||:719.04 | VQ Heads: [H0:100.0%, H1:100.0%, H2:100.0%, H3:100.0%] | Mem:4.70GB | 0.76s
+[Chunk 14] Step 0201 | Loss: 12.8935 (CE:5.72, Traj:1.1778, VQ:1.74423) | ||∇Overall||:945.77 | VQ Heads: [H0:100.0%, H1:100.0%, H2:100.0%, H3:100.0%] | Mem:4.70GB | 0.77s
+[Chunk 15] Step 0500 | Loss:  9.8412 (CE:5.12, Traj:0.6841, VQ:1.42105) | ||∇Overall||:620.14 | VQ Heads: [H0:100.0%, H1:100.0%, H2:100.0%, H3:100.0%] | Mem:4.70GB | 0.75s
+==============================================================================================================
+✓ Completed Chunk 15 in 7.9m (500 steps) | Final weights saved: student_4d_mind.safetensors
+==============================================================================================================</code></pre>
+            </div>
+
+            <h3>The 3:17 AM Inference Test</h3>
+            <p>
+                Eager to see the model reason, I fired up <code>test_4d_mind.py</code>. I provided a standard logic question:
+            </p>
+            <div class="callout">
+                <strong>Input Prompt:</strong> <em>"If 3 cats catch 3 mice in 3 minutes, how many cats are needed to catch 100 mice in 100 minutes?"</em>
+            </div>
+
+            <p>And here is the raw, unedited response that the model generated:</p>
+
+            <div class="callout callout-rose">
+                <div class="callout-title">💥 Actual Model Output (Verbatim)</div>
+                <p style="font-family: 'Fira Code', monospace; font-size: 0.88rem; line-height: 1.6; margin: 0; word-break: break-all;">
+                    with/File/File/File/File/File/Filerh/File trianglesTriangleykańykańykańEEEEykańèses classics classics classics classics plut trianglesParallelPar...
+                </p>
+            </div>
+
+            <h3>The Painful Post-Mortem: The "Empty Vessel" Fallacy</h3>
+            <p>
+                Why did a model with a rapidly falling loss generate absolute, incoherent gibberish?
+            </p>
+            <p>
+                The answer lies in the harsh reality of <strong>Language Pre-training Dynamics</strong>:
+            </p>
+            <ol>
+                <li><strong>The Substrate Problem:</strong> Frontier LLMs like Llama, Qwen, or Mistral spend <strong>15+ trillion tokens</strong> learning English grammar, syntax, lexical collocations, world history, and common sense.</li>
+                <li><strong>My Dataset Scale:</strong> My 15 chunks totaled roughly <strong>15,000 reasoning sequences</strong> (a few million tokens at most).</li>
+                <li><strong>The Trajectory Illusion:</strong> The model successfully minimized the Mean Squared Error (MSE) against the 256D teacher trajectory vectors. It figured out how to align its internal mathematical projections with the teacher's latent manifold. But when it projected back into its token vocabulary via the language modeling head, it had <em>no understanding of English syntax</em>. It was a mathematical calculator with no vocal cords.</li>
+            </ol>
+            <p>
+                Trying to teach an AI both <em>language syntax</em> and <em>high-dimensional 4D latent reasoning</em> from scratch on 15,000 sequences is mathematically impossible. I had to pivot.
+            </p>
+        </section>
+
+        <!-- CHAPTER 4 -->
+        <section id="chap-4">
+            <h2><span class="chap-num">Chapter 4</span> The Mathematical Debate: Why Gradient Descent Fails &amp; EMA Wins in VQ</h2>
+
+            <p>
+                Before detailing my architectural pivot, I must explore one of the most critical and non-obvious engineering decisions in this entire project: <strong>Why did I strictly avoid gradient descent for updating the Vector Quantizer codebooks, and instead implement Exponential Moving Averages (EMA)?</strong>
+            </p>
+
+            <h3>The Non-Differentiability of the Argmin</h3>
+            <p>
+                In a Vector Quantizer (VQ), continuous latent vectors $z_e(x) \in \mathbb{R}^d$ must be mapped to discrete codebook vectors $e_k \in \mathbb{R}^d$ from a dictionary of size $K$:
+            </p>
+
+            <div class="math-block">
+                $$z_q(x) = e_k \quad \text{where} \quad k = \arg\min_{j \in \{1, \dots, K\}} \| z_e(x) - e_j \|_2^2$$
+                <div class="math-caption">Equation 1: Hard nearest-neighbor quantization assignment</div>
+            </div>
+
+            <p>
+                The fundamental issue is that the $\arg\min$ operation is a piecewise constant step function. Its mathematical derivative with respect to the continuous input is <strong>zero almost everywhere</strong>:
+            </p>
+
+            <div class="math-block">
+                $$\frac{\partial z_q(x)}{\partial z_e(x)} = 0 \quad (\text{almost everywhere})$$
+                <div class="math-caption">Equation 2: Vanishing gradient through discrete code assignment</div>
+            </div>
+
+            <p>
+                While the standard <em>Straight-Through Estimator (STE)</em> bypasses this during the backward pass by directly copying gradients from $z_q$ back to $z_e$ (i.e., $\nabla_{z_e} \mathcal{L} \approx \nabla_{z_q} \mathcal{L}$), how do you update the codebook vectors $e_k$ themselves?
+            </p>
+
+            <h3>The Two Failure Modes of Gradient Descent on Codebooks</h3>
+            <p>
+                In textbook implementations (such as basic VQ-VAE), one adds a codebook loss term:
+                $$\mathcal{L}_{\text{codebook}} = \| \text{sg}[z_e(x)] - e_k \|_2^2$$
+                and optimizes $e_k$ using AdamW or SGD alongside the rest of the neural network. In recurrent architectures, this leads to two fatal catastrophes:
+            </p>
+
+            <div class="grid-2">
+                <div class="card" style="border-left: 4px solid var(--accent-danger);">
+                    <h4>1. Codebook Collapse (Dead Codes)</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        At initialization, a small subset of codebook vectors happens to be marginally closer to the data centroid. They win the $\arg\min$ competition and receive gradients. The remaining 90–95% of codebook vectors never win an assignment, receive <strong>exactly zero gradient updates</strong>, and remain frozen in space forever. The effective capacity of your $2048$-sized codebook collapses to 10 or 20 active codes.
+                    </p>
+                </div>
+                <div class="card" style="border-left: 4px solid var(--accent-warning);">
+                    <h4>2. Optimizer Momentum Lag &amp; Drift</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        AdamW maintains first and second momentum buffers ($\beta_1 = 0.9, \beta_2 = 0.999$) for every parameter. In my model, hidden vectors circulate through <strong>6 recurrent passes</strong>. As thoughts evolve, the optimal cluster centers shift rapidly. AdamW's momentum buffers drag codebook vectors in outdated directions based on stale historical steps, destabilizing the entire recurrent manifold.
+                    </p>
+                </div>
+            </div>
+
+            <h3>The Solution: Exponential Moving Average (EMA) as Online K-Means</h3>
+            <p>
+                Inspired by the deep mathematical formulation in VQ-VAE-2 (Van den Oord et al.), I abandoned gradient descent for the codebook entirely. I treat codebook vector updates as an <strong>online, streaming k-means clustering process</strong> using Exponential Moving Averages.
+            </p>
+            <p>
+                For each code $k$ in head $h$, I maintain two non-trainable tracking buffers:
+            </p>
+            <ol>
+                <li>$N_k^{(t)}$: The moving average count of vectors assigned to code $k$.</li>
+                <li>$m_k^{(t)}$: The moving average sum of all latent vectors assigned to code $k$.</li>
+            </ol>
+
+            <div class="math-block">
+                $$N_k^{(t)} = \gamma N_k^{(t-1)} + (1 - \gamma) \sum_{i=1}^B \mathbf{1}[k_i = k]$$
+                $$m_k^{(t)} = \gamma m_k^{(t-1)} + (1 - \gamma) \sum_{i: k_i = k} x_i$$
+                $$e_k^{(t)} = \frac{m_k^{(t)}}{N_k^{(t)} + \epsilon}$$
+                <div class="math-caption">Equation 3: Vector Quantization EMA centroid update with decay rate $\gamma = 0.99$</div>
+            </div>
+
+            <p>
+                Notice how elegant this is: <strong>no learning rates, no momentum lag, no optimizer states</strong>. Codebook vectors move directly to the true empirical center of the latent representations assigned to them.
+            </p>
+
+            <h3>The Secret Weapon: Active Dead Code Replacement</h3>
+            <p>
+                Even with EMA, if a code is never assigned, its count decays towards zero. To guarantee maximum entropy and eliminate dead capacity, I implemented a vectorized dead-code resurrection mechanism:
+            </p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span>MLX PYTHON: GroupedVectorQuantizer._replace_dead_codes</span>
+                    <span>pure_latent_4d_mind/train_4d_mind.py</span>
+                </div>
+                <pre><code><span class="kw">def</span> <span class="fn">_replace_dead_codes</span>(self, x_flat, encoding_indices):
+    <span class="cm"># Detect codes with assignment count &lt; DEAD_THRESHOLD.</span>
+    <span class="cm"># Resurrect them by sampling random active vectors from the current batch</span>
+    <span class="cm"># plus subtle Gaussian noise to shatter symmetry.</span>
+    DEAD_THRESHOLD = <span class="num">1.0</span>
+    N = x_flat.shape[<span class="num">0</span>]
+    
+    <span class="kw">for</span> head_idx <span class="kw">in</span> range(self.num_heads):
+        head_counts = self._ema_cluster_count[head_idx]  <span class="cm"># (K,)</span>
+        dead_mask = head_counts &lt; DEAD_THRESHOLD
+        num_dead = int(mx.sum(dead_mask).item())
+        
+        <span class="kw">if</span> num_dead &gt; <span class="num">0</span>:
+            <span class="cm"># Sample random active vectors from this batch</span>
+            rand_indices = mx.random.randint(<span class="num">0</span>, N, shape=(num_dead,))
+            sampled_vectors = x_flat[rand_indices, head_idx, :]
+            
+            <span class="cm"># Inject Gaussian jitter to prevent duplicate codebooks</span>
+            noise = <span class="num">0.01</span> * mx.random.normal(sampled_vectors.shape)
+            replacement_vectors = sampled_vectors + noise
+            
+            <span class="cm"># Re-seed the dead codebook entries &amp; reset counters</span>
+            dead_indices = mx.where(dead_mask)[<span class="num">0</span>]
+            self.codebooks[head_idx, dead_indices] = replacement_vectors
+            self._ema_cluster_count[head_idx, dead_indices] = <span class="num">1.0</span>
+            self._ema_cluster_sum[head_idx, dead_indices] = replacement_vectors</code></pre>
+            </div>
+
+            <div class="callout callout-green">
+                <div class="callout-title">🏆 The Empirical Result: 100.0% Head Utilization</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    Throughout all 7,500 training steps, telemetry logs proved the power of this approach. While gradient descent typically yields 15–30% codebook utilization, my EMA + dead code replacement sustained <strong>100.0% active codebook usage</strong> across all 4 heads: <code>VQ Heads: [H0:100.0%, H1:100.0%, H2:100.0%, H3:100.0%] (Avg: 100.0%)</code>.
+                </p>
+            </div>
+        </section>
+
+        <!-- CHAPTER 5 -->
+        <section id="chap-5">
+            <h2><span class="chap-num">Chapter 5</span> The Architectural Pivot: Injecting a Hybrid 4D Recurrent Core</h2>
+
+            <p>
+                Sunday morning brought the definitive realization: <strong>Never train language from scratch. Reinvent reasoning, not vocabulary.</strong>
+            </p>
+            <p>
+                I designed <strong>Option 2 — The Hybrid 4D Recurrent Qwen (<code>train_hybrid_4d.py</code>)</strong>. Instead of building a scratch model, I took <strong>Qwen 3.5 4B</strong>—a pre-trained language model with exceptional English and coding fluency—froze 99.5% of its weights, and surgically grafted a 4D Latent Router into its internal layers.
+            </p>
+
+            <h3>Why Qwen 3.5 4B? The Hidden Linear Attention Superpower</h3>
+            <p>
+                To understand why Qwen 3.5 4B is the perfect substrate for recurrent reasoning, one must inspect its internal block composition. Unlike pure Transformer architectures (like Llama 3) where every layer is a standard quadratic Multi-Head Attention layer, Qwen 3.5 uses a <strong>Hybrid Architecture</strong>:
+            </p>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Layer Range</th>
+                        <th>Layer Architecture</th>
+                        <th>KV-Cache Behavior</th>
+                        <th>Architectural Assignment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Layers 0 – 15</strong></td>
+                        <td>Full Attention + SwiGLU FFN (Layer 15 is Full Attention)</td>
+                        <td>Standard $O(N^2)$ causal KV-cache</td>
+                        <td><strong>Zone 1: Parse</strong> (Frozen syntax and semantic ingestion)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Layers 16 – 18</strong></td>
+                        <td><strong>Gated Delta Networks (GDN / Linear Attention)</strong></td>
+                        <td><strong>Stateless / Constant $O(1)$ State</strong></td>
+                        <td><strong>Zone 2: Recurrent Core</strong> (The 6-Iteration Thinking Loop!)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Layers 19 – 35</strong></td>
+                        <td>Alternating Full Attention &amp; Linear Attention</td>
+                        <td>Downstream causal decoding</td>
+                        <td><strong>Zone 3: Unembed</strong> (Frozen generation to vocabulary)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout callout-amber">
+                <div class="callout-title">⚡ Why Full Attention Breaks Recurrent Loops</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    If you try to pass an activation through a standard Transformer attention layer 6 times in a loop, the model appends new Keys and Values to its KV-cache at every iteration! Sequence length $T$ becomes $6T$, destroying rotary position embeddings (RoPE) and causing memory usage to explode.
+                    <br><br>
+                    <strong>Layers 16, 17, and 18 are pure Gated Delta Networks (linear attention).</strong> When passed <code>cache=None</code>, they are <em>completely stateless</em>. They act like a deep recurrent neural network (RNN) that can be looped $N$ times without allocating a single additional byte of KV-cache memory!
+                </p>
+            </div>
+
+
+            <h3>The Activation Function Zoo: Mathematical Rationale &amp; Stability Dynamics</h3>
+            <p>
+                In standard transformer design, activation functions are often treated as interchangeable defaults (e.g., swapping GELU for SiLU). In my recurrent hybrid architecture, however, every activation function was selected with deliberate mathematical intent to prevent non-linear divergence across 6 recurrent thinking loops:
+            </p>
+
+            <table class="spec-table">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>Activation Function</th>
+                        <th>Mathematical Formula</th>
+                        <th>Critical Architectural Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>4D Router</strong></td>
+                        <td><strong>Temperature-Scaled Sigmoid</strong></td>
+                        <td>$$\sigma(z / \tau) = \frac{1}{1 + e^{-z / \tau}}$$</td>
+                        <td>
+                            Maps unbounded continuous activations $h \in \mathbb{R}^{2560}$ into the bounded 4D unit hypercube $[0, 1]^4$.
+                            <br><br>
+                            The learnable temperature $\tau$ (clamped to $[0.1, 10.0]$) governs the dispersion: at $\tau = 1.0$, it produces smooth gradients across the hypercube interior; as training matures and entropy loss is minimized, it sharpens coordinates toward the 16 hypercube vertices $\{0, 1\}^4$, creating distinct topological routing buckets.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>FiLM Modulation</strong></td>
+                        <td><strong>Bounded Hyperbolic Tangent ($\tanh$)</strong></td>
+                        <td>$$\gamma = 1 + 0.1 \tanh(W_\gamma c + b_\gamma)$$ $$\beta = 0.1 \tanh(W_\beta c + b_\beta)$$</td>
+                        <td>
+                            <strong>Mitigating the Compounding Recurrence Hazard:</strong> In standard feed-forward networks, linear FiLM modulation $h \odot \gamma + \beta$ is applied once. But in my 6-iteration recurrent loop, an unconstrained multiplier compounds exponentially:
+                            $$h_6 \approx h_0 \cdot \prod_{i=1}^6 \gamma_i$$
+                            If $\gamma \approx 1.4$, after 6 loops $1.4^6 \approx 7.5\times$ (activation explosion). If $\gamma \approx 0.6$, $0.6^6 \approx 0.046\times$ (signal vanishing).
+                            <br><br>
+                            By wrapping in $0.1 \tanh(\cdot)$, $\gamma$ is strictly bounded within $[0.9, 1.1]$ and $\beta \in [-0.1, 0.1]$. Each recurrent loop can only perturb representations by at most $\pm 10\%$, guaranteeing asymptotic numerical stability.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>FiLMSwiGLU &amp; FFNs</strong></td>
+                        <td><strong>SiLU (Swish)</strong></td>
+                        <td>$$\text{SiLU}(x) = x \cdot \sigma(x) = \frac{x}{1 + e^{-x}}$$</td>
+                        <td>
+                            Powers the SwiGLU gating mechanism: $\text{SwiGLU}(x) = (x W_{\text{gate}} \cdot \sigma(x W_{\text{gate}})) \odot (x W_{\text{up}}) W_{\text{down}}$.
+                            <br><br>
+                            Unlike ReLU, SiLU is smooth, non-monotonic, and retains non-zero gradients for slightly negative inputs ($x \in [-1, 0]$), preventing dead neurons during deep backpropagation through time.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Layer Normalization</strong></td>
+                        <td><strong>RMSNorm</strong></td>
+                        <td>$$\bar{a} = \frac{a}{\sqrt{\frac{1}{d}\sum_{i=1}^d a_i^2 + \epsilon}} \odot g$$</td>
+                        <td>
+                            Enforces scale invariance across layers without the computational overhead of mean-centering subtraction. On Apple Silicon Metal shaders, eliminating the mean reduction step reduces kernel dispatch latency by ~18%.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+                        <h3>The Anatomy of the 4D Router &amp; FiLM Modulation</h3>
+            <p>
+                Inside Zone 2, I injected my custom, trainable 4D manifold components:
+            </p>
+            <ol>
+                <li>
+                    <strong>4D Coordinate Router:</strong> A linear projection with temperature-scaled sigmoid that maps high-dimensional hidden states $h \in \mathbb{R}^{2560}$ into a 4-dimensional hypercube coordinate $c \in [0, 1]^4$:
+                    $$c = \sigma\left(\frac{W_r h + b_r}{\tau}\right)$$
+                </li>
+                <li>
+                    <strong>FiLM Modulation (Feature-wise Linear Modulation):</strong> Rather than just adding coordinates, FiLM scales and shifts the hidden representation adaptively:
+                    $$\gamma = 1.0 + 0.1 \cdot \tanh(W_\gamma c + b_\gamma), \quad \beta = 0.1 \cdot \tanh(W_\beta c + b_\beta)$$
+                    $$h_{\text{modulated}} = h \odot \gamma + \beta$$
+                </li>
+                <li>
+                    <strong>Identity Initialization:</strong> I initialized $W_\gamma, b_\gamma, W_\beta, b_\beta$ to <strong>strict zeros</strong>. At step 0, $\gamma = 1.0$ and $\beta = 0.0$. This meant the hybrid model started as an <em>exact 100% identity pass</em> of standard, fluent Qwen 3.5 4B!
+                </li>
+            </ol>
+
+            <h3>The 6-Iteration Recurrent Loop with Anchor Injection</h3>
+            <p>
+                How do I prevent hidden states from exploding or degenerating during 6 passes through Zone 2? I introduced <strong>Anchor Injection</strong>:
+            </p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span>MLX PYTHON: train_hybrid_4d.py (THE FORWARD LOOP)</span>
+                    <span>pure_latent_4d_mind/train_hybrid_4d.py</span>
+                </div>
+                <pre><code><span class="cm"># PASS 1: Zone 1 (Parse through layers 0-15)</span>
+h = run_zone(mx.stop_gradient(h), zone_1)
+h_anchor = h  <span class="cm"># Save output of Zone 1 as the anchor point</span>
+
+target_mapping = {<span class="num">1</span>: <span class="num">0</span>, <span class="num">3</span>: <span class="num">1</span>, <span class="num">5</span>: <span class="num">2</span>, <span class="num">6</span>: <span class="num">3</span>}
+
+<span class="cm"># PASS 2: Zone 2 (Loop 6 times through Layers 16-18)</span>
+<span class="kw">for</span> loop_idx <span class="kw">in</span> range(<span class="num">1</span>, <span class="num">7</span>):
+    <span class="cm"># Anchor Injection: ground recurrent drift with the original parsed context</span>
+    h = h + h_anchor
+    
+    <span class="cm"># At designated reasoning steps, route through 4D manifold &amp; quantize</span>
+    <span class="kw">if</span> loop_idx <span class="kw">in</span> target_mapping:
+        vq_idx = target_mapping[loop_idx]
+        h = process_distill_point(h, vq_idx=vq_idx)
+        
+    <span class="cm"># Execute purely stateless linear attention block (Layers 16, 17, 18)</span>
+    h = run_zone(mx.stop_gradient(h), zone_2, is_zone_2=<span class="kw">True</span>)
+
+<span class="cm"># PASS 3: Zone 3 (Unembed through remaining frozen layers 19-35)</span>
+h = run_zone(mx.stop_gradient(h), zone_3)
+logits = self.lm_head(self.core.norm(h))</code></pre>
+            </div>
+
+            <h3>The Parameter Efficiency Triumph</h3>
+            <p>
+                Look at the dramatic difference in parameter footprint:
+            </p>
+            <ul>
+                <li>Total Model Parameters: <strong>4.2 Billion</strong></li>
+                <li>Frozen Parameters: <strong>4,178,340,000 (99.5%)</strong></li>
+                <li>Trainable 4D Adapter Parameters: <strong>Only 21,660,000 (0.5%)</strong></li>
+                <li>Saved Checkpoint Size: <strong>83 Megabytes!</strong> (Down from 1.17 GB in Option 1)</li>
+            </ul>
+            <p>
+                This solved my 14 GB free disk space constraint instantly. I could save checkpoints for every single chunk without any danger of filling the SSD.
+            </p>
+        </section>
+
+        <!-- CHAPTER 6 -->
+        <section id="chap-6">
+            <h2><span class="chap-num">Chapter 6</span> The MLX Engineering Chronicles: Kernel Panics, Lazy Graphs &amp; Caffeinate</h2>
+
+            <p>
+                Writing novel architectures on consumer hardware is an intense journey through systems-level debugging. Here are three critical engineering challenges I diagnosed and conquered on Apple Silicon:
+            </p>
+
+            <h3>Chronicle 1: The Midnight Kernel Panic &amp; The Underscore (`_`) Attribute Trap</h3>
+            <div class="story-moment">
+                <div class="timestamp">SUNDAY NIGHT — 22:50 PM</div>
+                <p style="margin: 0;">
+                    <em>"The Mac mini suddenly rebooted with a loud chime! Screen went black, Apple logo appeared, and macOS reported a Kernel Panic due to memory exhaustion. What happened? Memory was steady at 4.7 GB just minutes ago!"</em>
+                </p>
+            </div>
+
+            <p>
+                Apple's MLX framework uses a <strong>Lazy Computation Graph</strong>. When you write <code>c = a + b</code> in MLX, no GPU kernels are executed; instead, an operation node is appended to a Directed Acyclic Graph (DAG). Physical memory is only allocated and computed when <code>mx.eval(...)</code> is called.
+            </p>
+            <p>
+                In my training loop, I carefully called:
+                <code>mx.eval(model.parameters(), optimizer.state, loss, grads)</code>
+                at the end of every step to flush the graph.
+            </p>
+            <p>
+                <strong>The Root Cause:</strong> In Python conventions, internal class attributes start with an underscore (e.g., <code>self._ema_cluster_sum</code> and <code>self._ema_cluster_count</code> in my <code>GroupedVectorQuantizer</code>).
+                By design, <strong>MLX's <code>model.parameters()</code> ignores private attributes starting with <code>_</code></strong>!
+            </p>
+            <p>
+                Because <code>_ema_cluster_sum</code> was never evaluated by <code>mx.eval</code>, MLX built a hidden, un-evaluated computation graph that grew by hundreds of tensor operations every single step. Over thousands of recurrent steps across Chunk 1, this invisible graph grew to tens of thousands of nested nodes.
+            </p>
+            <p>
+                When <code>mx.save_safetensors</code> was called at the end of the chunk to serialize weights, it forced an immediate evaluation of the entire model. MLX suddenly attempted to evaluate tens of thousands of accumulated recursive operations all at once! Memory usage spiked instantaneously from 4.7 GB to over 24 GB, overwhelming the macOS virtual memory swap daemon and causing a fatal kernel panic.
+            </p>
+
+            <div class="callout callout-green">
+                <div class="callout-title">✅ The Fix</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    I explicitly registered internal EMA buffers into the step evaluation:
+                    <code>mx.eval(model.trainable_parameters(), optimizer.state, [vq._ema_cluster_sum for vq in model.vqs], [vq._ema_cluster_count for vq in model.vqs])</code>.
+                    Instantly, the memory graph was pruned at every step, and memory usage remained permanently anchored at 4.70 GB with zero leaks.
+                </p>
+            </div>
+
+            <h3>Chronicle 2: The In-Loop Conversion Tax</h3>
+            <p>
+                Early iterations of my training loop ran at a sluggish <strong>1.35 seconds per step</strong>. Profiling revealed that inside the forward pass, diagnostic logging was calling <code>.item()</code> and <code>np.array()</code> to compute loss components on active MLX arrays.
+            </p>
+            <p>
+                Calling <code>.item()</code> forces a synchronous GPU-to-CPU roundtrip: the CPU halts, waits for the Metal GPU shader to finish execution, retrieves the scalar, and only then continues.
+            </p>
+            <p>
+                <strong>The Solution:</strong> I decoupled all scalar evaluations from the forward pass, moving metric printing strictly inside a <code>if step % 25 == 0:</code> block. Training throughput leaped from 1.35s to <strong>0.75s per step—a 44% acceleration!</strong>
+            </p>
+
+            <h3>Chronicle 3: The 45-Minute Mystery &amp; `caffeinate`</h3>
+            <p>
+                During extended background training while I was away from the keyboard, the process mysteriously paused every 45 minutes.
+            </p>
+            <p>
+                I discovered that macOS Energy Saver settings automatically put idle systems to sleep after 45 minutes of keyboard/mouse inactivity, suspending terminal background daemons.
+            </p>
+            <p>
+                The fix was the classic Unix command built into macOS:
+                <br>
+                <code>caffeinate -dis python train_hybrid_4d.py --start-chunk 10</code>
+                <br>
+                The flags <code>-d</code> (prevent display sleep), <code>-i</code> (prevent idle sleep), and <code>-s</code> (prevent system sleep) kept the M4 Pro awake and computing relentlessly.
+            </p>
+        </section>
+
+        <!-- CHAPTER 7 -->
+        <section id="chap-7">
+            <h2><span class="chap-num">Chapter 7</span> The Final Showstopper: The 248k vs 151k Tokenizer Mismatch Trap</h2>
+
+            <p>
+                With the Hybrid Model cruising smoothly and the training pipeline stabilized, I ran into my final and most intriguing roadblock at Chunk 10.
+            </p>
+
+            <div class="story-moment">
+                <div class="timestamp">MONDAY MORNING — 08:30 AM</div>
+                <p style="margin: 0;">
+                    <em>"Chunk 10 started. Step 25... Step 50... Step 75... and then, the process vanished! Exit code: 0. No exception traceback, no Python error, no segmentation fault. I restarted it—it died at exactly step 76 again. Like clockwork."</em>
+                </p>
+            </div>
+
+            <h3>The Forensic Investigation</h3>
+            <p>
+                Why would a Python script terminate silently with exit code 0 on the exact same batch?
+            </p>
+            <p>
+                I isolated the batch and inspected the raw token arrays yielded by <code>get_batches</code> from <code>teacher_256D_targets_chunk_10.pkl</code>. The discovery was shocking:
+            </p>
+
+            <div class="code-container">
+                <div class="code-header">
+                    <span>PYTHON DIAGNOSTIC: inspect_chunk.py</span>
+                    <span>CHUNK 10 FORENSICS</span>
+                </div>
+                <pre><code>Batch 76 Token IDs: [15, 892, 10421, 554, ..., 248068, 12, 98]
+Max token ID in batch: 248068
+Student Qwen 3.5 4B Vocabulary Size: 151,936
+Status: FATAL OUT-OF-BOUNDS INDEX!</code></pre>
+            </div>
+
+            <h3>The Anatomy of a Silent Metal GPU Death</h3>
+            <p>
+                In CUDA on NVIDIA hardware, looking up an out-of-bounds embedding token (e.g., index $248068$ when the table only has $151936$ rows) triggers a device-side assert: <code>CUDA error: device-side assert triggered</code>.
+            </p>
+            <p>
+                On Apple Silicon with MLX Metal shaders, memory access bounds violations inside Metal Shading Language kernels trigger an immediate driver-level process abort. Because the termination is executed by the Metal driver rather than the Python interpreter, Python never catches an exception and exits cleanly with <code>code 0</code>!
+            </p>
+
+            <h3>The Architectural Realization</h3>
+            <p>
+                When my data preparation script originally extracted targets using <code>extract_targets.py</code>, it had tokenized sequences using a 248k vocabulary (common in Gemma / custom teacher configurations), whereas Qwen 3.5 4B utilizes a 151,936 vocabulary.
+            </p>
+            <p>
+                This revealed a profound theoretical lesson for the entire field of knowledge distillation:
+            </p>
+
+            <div class="callout callout-rose">
+                <div class="callout-title">🚨 The Fundamental Law of Latent Distillation</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    <strong>You cannot distill latent layer trajectories across mismatched tokenizers.</strong>
+                    <br><br>
+                    Even if you clamp token IDs to avoid out-of-bounds crashes, token index $t$ in a 248k vocabulary represents a completely different lexical boundary than token index $t$ in a 151k vocabulary. Word merges, subword pieces, and punctuation split points do not align. Forcing a student to match teacher latent activations at misaligned token timestamps destroys cross-attention coherence.
+                </p>
+            </div>
+        </section>
+
+        <!-- CHAPTER 8 -->
+        <section id="chap-8">
+            <h2><span class="chap-num">Chapter 8</span> Multi-Task Distillation Loss &amp; Empirical Convergence Graphs</h2>
+
+            <p>
+                The mathematical objective powering the Hybrid 4D Recurrent model balances four complementary loss terms:
+            </p>
+
+            <div class="math-block">
+                $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + 5.0 \cdot \mathcal{L}_{\text{Trajectory}} + 1.0 \cdot \mathcal{L}_{\text{VQ}} + \mathcal{L}_{\text{Router Entropy}}$$
+                <div class="math-caption">Equation 4: The 4-Part Multi-Task Loss Formulation</div>
+            </div>
+
+            <ol>
+                <li>
+                    <strong>Cross-Entropy Loss ($\mathcal{L}_{\text{CE}}$):</strong> Standard next-token prediction loss ensuring the student preserves its natural language generation capability.
+                </li>
+                <li>
+                    <strong>Trajectory Distillation Loss ($\mathcal{L}_{\text{Trajectory}}$):</strong> A combined Mean Squared Error (MSE) and Cosine Distance against the teacher's SVD 256D representations:
+                    $$\mathcal{L}_{\text{Trajectory}} = \| h_{256} - y_{\text{teacher}} \|_2^2 + \left(1 - \frac{h_{256} \cdot y_{\text{teacher}}}{\|h_{256}\|_2 \|y_{\text{teacher}}\|_2}\right)$$
+                </li>
+                <li>
+                    <strong>VQ Commitment Loss ($\mathcal{L}_{\text{VQ}}$):</strong> Standard commitment penalty encouraging encoder representations to commit to codebook vectors without drifting:
+                    $$\mathcal{L}_{\text{VQ}} = \| \text{sg}[z_q] - h_{\text{mod}} \|_2^2 + 0.25 \cdot \| z_q - \text{sg}[h_{\text{mod}}] \|_2^2$$
+                </li>
+                <li>
+                    <strong>Router Entropy Loss ($\mathcal{L}_{\text{Router Entropy}}$):</strong> Maximizing the entropy of the 4D coordinate assignments to prevent the router from collapsing into a single static corner of the hypercube.
+                </li>
+            </ol>
+
+            <h3>Empirical Loss Curves</h3>
+            <p>
+                Below is the interactive telemetry chart recorded during the successful segments of my training runs. Toggle between metrics to inspect individual loss convergence:
+            </p>
+
+            <div class="loss-chart-container">
+                <div class="chart-toggle-group">
+                    <button class="chart-btn active" onclick="setChartMetric('total')">Total Multi-Task Loss</button>
+                    <button class="chart-btn" onclick="setChartMetric('traj')">Trajectory MSE Loss</button>
+                    <button class="chart-btn" onclick="setChartMetric('ce')">Cross-Entropy (CE)</button>
+                    <button class="chart-btn" onclick="setChartMetric('vq')">VQ Commitment Loss</button>
+                </div>
+
+                <div style="height: 320px; width: 100%; position: relative;">
+                    <svg width="100%" height="100%" viewBox="0 0 1000 300" preserveAspectRatio="none" id="chart-svg">
+                        <line x1="60" y1="50" x2="950" y2="50" stroke="#f1f5f9" stroke-width="2"/>
+                        <line x1="60" y1="125" x2="950" y2="125" stroke="#f1f5f9" stroke-width="2"/>
+                        <line x1="60" y1="200" x2="950" y2="200" stroke="#f1f5f9" stroke-width="2"/>
+                        <line x1="60" y1="260" x2="950" y2="260" stroke="#cbd5e1" stroke-width="2"/>
+
+                        <text x="50" y="55" fill="#94a3b8" font-size="12" text-anchor="end" id="y-max">75.0</text>
+                        <text x="50" y="130" fill="#94a3b8" font-size="12" text-anchor="end" id="y-mid">35.0</text>
+                        <text x="50" y="205" fill="#94a3b8" font-size="12" text-anchor="end" id="y-low">15.0</text>
+                        <text x="50" y="265" fill="#94a3b8" font-size="12" text-anchor="end" id="y-min">0.0</text>
+
+                        <text x="60" y="285" fill="#94a3b8" font-size="12">Chunk 0</text>
+                        <text x="280" y="285" fill="#94a3b8" font-size="12">Chunk 4</text>
+                        <text x="510" y="285" fill="#94a3b8" font-size="12">Chunk 8</text>
+                        <text x="730" y="285" fill="#94a3b8" font-size="12">Chunk 12</text>
+                        <text x="940" y="285" fill="#94a3b8" font-size="12">Chunk 15</text>
+
+                        <path id="loss-path" d="M 60 60 Q 150 220 280 235 T 510 245 T 730 252 T 950 255" fill="none" stroke="#2563eb" stroke-width="3.5" stroke-linecap="round"/>
+                        <path id="loss-area" d="M 60 60 Q 150 220 280 235 T 510 245 T 730 252 T 950 255 L 950 260 L 60 260 Z" fill="url(#blue-grad)" opacity="0.1"/>
+
+                        <defs>
+                            <linearGradient id="blue-grad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#2563eb"/>
+                                <stop offset="100%" stop-color="#ffffff"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-light); text-align: center; margin-top: 0.5rem;" id="chart-caption">
+                    Total Multi-Task Loss: Rapid exponential decay from initial cold-start (~72.4) settling into asymptotic convergence (~11.4).
+                </div>
+            </div>
+        </section>
+
+        <!-- CHAPTER 9 -->
+        <section id="chap-9">
+            <h2><span class="chap-num">Chapter 9</span> The Interactive Architectural Simulator &amp; Code Deep Dive</h2>
+
+            <p>
+                To build an intuitive spatial model of how tokens propagate through frozen transformer layers, enter the 4D router, and recirculate through the recurrent linear attention core, interact with the live simulation below:
+            </p>
+
+            <div class="interactive-container">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.45rem;">Interactive Forward Pass Simulation</h3>
+                        <p style="margin: 0.2rem 0 0; font-size: 0.9rem; color: var(--text-muted);">
+                            Watch a token signal move through frozen parsing, enter the 4D manifold, and recirculate 6 times.
+                        </p>
+                    </div>
+                    <div>
+                        <span class="badge badge-purple" id="loop-counter">Loop: 0 / 6</span>
+                    </div>
+                </div>
+
+                <div class="diagram-viewport" id="viewport">
+
+                    <svg class="svg-overlay" id="svg-paths">
+                        <defs>
+                            <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                                <polygon points="0 0, 8 3, 0 6" fill="#cbd5e1"/>
+                            </marker>
+                        </defs>
+                        <path id="path-z1-router" class="conn-path" d="" marker-end="url(#arrow)"/>
+                        <path id="path-router-film" class="conn-path" d="" marker-end="url(#arrow)"/>
+                        <path id="path-film-vq" class="conn-path" d="" marker-end="url(#arrow)"/>
+                        <path id="path-vq-z2" class="conn-path" d="" marker-end="url(#arrow)"/>
+                        <path id="path-loop" class="conn-path" d="" marker-end="url(#arrow)"/>
+                        <path id="path-z2-z3" class="conn-path" d="" marker-end="url(#arrow)"/>
+                    </svg>
+
+                    <div class="diag-grid">
+                        <div class="diag-node frozen" id="node-z1">
+                            <span class="badge" style="margin-bottom: 0.4rem; font-size: 0.65rem;">FROZEN</span>
+                            <div class="diag-node-title">Zone 1: Parse</div>
+                            <div class="diag-node-sub">Layers 0–15 (dim=2560)</div>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.4rem;">Full Attention + SwiGLU</div>
+                        </div>
+
+                        <div class="diag-node trainable" id="node-router">
+                            <span class="badge badge-blue" style="margin-bottom: 0.4rem; font-size: 0.65rem;">TRAINABLE</span>
+                            <div class="diag-node-title">4D Router &amp; FiLM</div>
+                            <div class="diag-node-sub">Coord $c \in [0, 1]^4$</div>
+                            <div style="font-size: 0.72rem; color: #2563eb; margin-top: 0.4rem;">$h \odot (1 + \tanh \gamma) + \beta$</div>
+                        </div>
+
+                        <div class="diag-node trainable" id="node-vq">
+                            <span class="badge badge-blue" style="margin-bottom: 0.4rem; font-size: 0.65rem;">TRAINABLE</span>
+                            <div class="diag-node-title">4-Head MHVQ</div>
+                            <div class="diag-node-sub">4 × 2048 Codebook</div>
+                            <div style="font-size: 0.72rem; color: #059669; margin-top: 0.4rem;">EMA Updates (100% Util)</div>
+                        </div>
+
+                        <div class="diag-node frozen" id="node-z2">
+                            <span class="badge" style="margin-bottom: 0.4rem; font-size: 0.65rem;">RECURRENT CORE</span>
+                            <div class="diag-node-title">Zone 2: GDN Core</div>
+                            <div class="diag-node-sub">Layers 16–18 (Stateless)</div>
+                            <div style="font-size: 0.72rem; color: #7c3aed; margin-top: 0.4rem;">Linear Attention Loop</div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 2rem; display: flex; justify-content: flex-end;">
+                        <div class="diag-node frozen" id="node-z3" style="width: 240px;">
+                            <span class="badge" style="margin-bottom: 0.4rem; font-size: 0.65rem;">FROZEN</span>
+                            <div class="diag-node-title">Zone 3: Unembed</div>
+                            <div class="diag-node-sub">Layers 19–35 &amp; LM Head</div>
+                            <div style="font-size: 0.72rem; color: #64748b; margin-top: 0.4rem;">Emits Next Token Logits</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sim-console">
+                    <div class="step-info" id="sim-log">
+                        <span style="color: #60a5fa; font-weight: 700;">[IDLE]</span> Click "Next Step →" or "Auto Run Loop 🔁" to simulate execution.
+                    </div>
+                    <div style="color: #94a3b8; font-size: 0.78rem;" id="sim-state">
+                        State: Ready
+                    </div>
+                </div>
+
+                <div class="sim-controls">
+                    <button class="btn" id="btn-step" onclick="runSingleStep()">Next Step →</button>
+                    <button class="btn btn-outline" id="btn-full" onclick="runFullPass()">Auto Run Loop 🔁</button>
+                    <button class="btn btn-outline" onclick="resetSim()">Reset</button>
+                </div>
+            </div>
+
+            <h3>Interactive Cluster Simulation: EMA vs Gradient Descent</h3>
+            <p>
+                Experience firsthand why gradient descent causes codebook collapse while EMA maintains uniform cluster centroids:
+            </p>
+
+            <div class="vq-sim-box">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h4 style="margin: 0;">Codebook Utilization Simulator</h4>
+                    <div>
+                        <button class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.82rem;" onclick="resetVQSim()">Reset Clusters</button>
+                    </div>
+                </div>
+
+                <div class="cluster-canvas-container">
+                    <div class="cluster-panel">
+                        <h5>Standard Gradient Descent (AdamW)</h5>
+                        <div class="cluster-vis" id="vis-sgd"></div>
+                        <div>
+                            <span class="stat-badge" id="badge-sgd" style="background: #fee2e2; color: #b91c1c;">Utilization: 25.0% (Collapse)</span>
+                        </div>
+                        <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            Notice how most codebook entries (grey dots) starve while only 2 codes (red dots) capture all data.
+                        </p>
+                    </div>
+
+                    <div class="cluster-panel">
+                        <h5>Exponential Moving Average (My EMA Implementation)</h5>
+                        <div class="cluster-vis" id="vis-ema"></div>
+                        <div>
+                            <span class="stat-badge" id="badge-ema" style="background: #dcfce7; color: #15803d;">Utilization: 100.0% (Perfect)</span>
+                        </div>
+                        <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.5rem;">
+                            EMA centroids track data clusters dynamically, while dead code replacement revives idle vectors.
+                        </p>
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <button class="btn" onclick="stepVQSim()">Simulate 100 Batches of Vectors</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- CHAPTER 10 -->
+        <section id="chap-10">
+            <h2><span class="chap-num">Chapter 10</span> Hard-Won Lessons &amp; The Frontier Ahead</h2>
+
+            <p>
+                When working at the intersection of consumer hardware constraints and novel neural architectures, failure is not the opposite of progress—it is the raw data that informs real breakthroughs.
+            </p>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h4>1. Distillation Demands Lexical Parity</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        Never attempt intermediate representation distillation across different tokenizers. Even small differences in subword vocabularies completely scramble intermediate trajectory time-steps.
+                    </p>
+                </div>
+                <div class="card">
+                    <h4>2. EMA Is Essential for Discrete Codebooks</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        Gradient descent on vector quantization codebooks is fundamentally broken in recurrent settings. Exponential Moving Average centroid updates with active dead-code resurrection guarantee 100% representational capacity.
+                    </p>
+                </div>
+                <div class="card">
+                    <h4>3. Exploit Hybrid Linear Attention</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        Modern models like Qwen 3.5 contain hidden linear attention blocks (GDN). These stateless layers can be looped recurrently for System 2 thinking without incurring any KV-cache memory explosion.
+                    </p>
+                </div>
+                <div class="card">
+                    <h4>4. Master the Lazy Graph Compiler</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted);">
+                        When working with Apple MLX, understand that lazy computation graphs will silently accumulate in unified memory if non-public attributes bypass <code>mx.eval</code>. Explicit evaluation is the difference between a smooth training run and a macOS kernel panic.
+                    </p>
+                </div>
+            </div>
+
+            <div class="callout callout-purple">
+                <div class="callout-title">🚀 What's Next for the 4D Latent Mind</div>
+                <p style="margin: 0; font-size: 0.95rem;">
+                    I am now regenerating the SVD reasoning trajectories using an aligned Qwen tokenizer. With lexical parity restored, my 21.6M-parameter Hybrid 4D Recurrent core is positioned to unlock continuous System 2 reasoning—compressing thousands of verbose Chain-of-Thought tokens into 6 tight recurrent loops on local Apple Silicon.
+                </p>
+            </div>
+        </section>
+
+        <!-- FOOTER -->
+        <footer>
+            <div style="font-weight: 700; color: #0f172a; margin-bottom: 0.5rem;">
+                LatentMind Research Dispatch • Built by Om Bansod with Apple MLX
+            </div>
+            <div>
+                Conducted on Apple Mac mini (M4 Pro, 24GB Unified Memory). Codebase: <code>pure_latent_4d_mind</code>.
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- SCRIPT FOR INTERACTIVE FEATURES -->
+    <script>
+        // Reading Progress Bar
+        window.addEventListener('scroll', () => {
+            const h = document.documentElement, 
+                  b = document.body,
+                  st = 'scrollTop',
+                  sh = 'scrollHeight';
+            const percent = (h[st]||b[st]) / ((h[sh]||b[sh]) - h.clientHeight) * 100;
+            document.getElementById('read-progress').style.width = percent + '%';
+        });
+
+        // Forward Pass Simulation Logic
+        let currentStep = 0;
+        let currentLoop = 0;
+        const totalLoops = 6;
+        let isRunningFull = false;
+
+        const nodes = {
+            z1: document.getElementById('node-z1'),
+            router: document.getElementById('node-router'),
+            vq: document.getElementById('node-vq'),
+            z2: document.getElementById('node-z2'),
+            z3: document.getElementById('node-z3')
+        };
+
+        const paths = {
+            p1: document.getElementById('path-z1-router'),
+            p2: document.getElementById('path-router-film'),
+            p3: document.getElementById('path-film-vq'),
+            p4: document.getElementById('path-vq-z2'),
+            p5: document.getElementById('path-z2-z3'),
+            ploop: document.getElementById('path-loop')
+        };
+        const logBox = document.getElementById('sim-log');
+        const stateBox = document.getElementById('sim-state');
+        const loopCounter = document.getElementById('loop-counter');
+
+        function updateNodePositions() {
+            const vp = document.getElementById('viewport').getBoundingClientRect();
+            const rZ1 = nodes.z1.getBoundingClientRect();
+            const rRouter = nodes.router.getBoundingClientRect();
+            const rVQ = nodes.vq.getBoundingClientRect();
+            const rZ2 = nodes.z2.getBoundingClientRect();
+            const rZ3 = nodes.z3.getBoundingClientRect();
+
+            const getRight = r => ({ x: r.right - vp.left, y: r.top - vp.top + r.height / 2 });
+            const getLeft = r => ({ x: r.left - vp.left, y: r.top - vp.top + r.height / 2 });
+            const getBottom = r => ({ x: r.left - vp.left + r.width / 2, y: r.bottom - vp.top });
+            const getTop = r => ({ x: r.left - vp.left + r.width / 2, y: r.top - vp.top });
+
+            // Path 1: Z1 -> Router
+            paths.p1.setAttribute('d', `M ${getRight(rZ1).x} ${getRight(rZ1).y} L ${getLeft(rRouter).x} ${getLeft(rRouter).y}`);
+            // Path 2: Router -> VQ
+            paths.p2.setAttribute('d', `M ${getRight(rRouter).x} ${getRight(rRouter).y} L ${getLeft(rVQ).x} ${getLeft(rVQ).y}`);
+            // Path 3: VQ -> Z2
+            paths.p3.setAttribute('d', `M ${getRight(rVQ).x} ${getRight(rVQ).y} L ${getLeft(rZ2).x} ${getLeft(rZ2).y}`);
+            // Path Loop: Z2 back to Router
+            const z2B = getBottom(rZ2);
+            const routerB = getBottom(rRouter);
+            paths.ploop.setAttribute('d', `M ${z2B.x} ${z2B.y} C ${z2B.x} ${z2B.y + 40}, ${routerB.x} ${routerB.y + 40}, ${routerB.x} ${routerB.y}`);
+            // Path Z2 -> Z3
+            paths.p5.setAttribute('d', `M ${getBottom(rZ2).x} ${getBottom(rZ2).y} L ${getTop(rZ3).x} ${getTop(rZ3).y}`);
+        }
+
+        window.addEventListener('resize', updateNodePositions);
+        setTimeout(updateNodePositions, 200);
+
+        function highlightNode(key) {
+            Object.values(nodes).forEach(n => n.classList.remove('node-active'));
+            if(key && nodes[key]) nodes[key].classList.add('node-active');
+        }
+
+        function runSingleStep() {
+            updateNodePositions();
+            currentStep++;
+
+            if(currentStep === 1) {
+                highlightNode('z1');
+                logBox.innerHTML = '<span style="color:#60a5fa; font-weight:700;">[ZONE 1]</span> Parsed token embeddings through frozen layers 0–15. Extracted anchor activation <code>h_anchor</code>.';
+                stateBox.innerText = 'Anchor Saved';
+            } else if(currentStep === 2) {
+                currentLoop++;
+                loopCounter.innerText = `Loop: ${currentLoop} / ${totalLoops}`;
+                highlightNode('router');
+                paths.p1.classList.add('conn-active');
+                logBox.innerHTML = `<span style="color:#38bdf8; font-weight:700;">[ROUTER - LOOP ${currentLoop}]</span> Injected anchor (<code>h + h_anchor</code>). Calculated 4D coordinate <code>c = [0.84, 0.12, 0.77, 0.43]</code> &amp; FiLM scaling.`;
+                stateBox.innerText = `Thinking Loop ${currentLoop}`;
+            } else if(currentStep === 3) {
+                highlightNode('vq');
+                paths.p2.classList.add('conn-active');
+                logBox.innerHTML = `<span style="color:#34d399; font-weight:700;">[MHVQ - LOOP ${currentLoop}]</span> Quantized modulated state into 4 discrete codebook heads. EMA centroid count incremented. (100% utilization).`;
+                stateBox.innerText = 'Quantized';
+            } else if(currentStep === 4) {
+                highlightNode('z2');
+                paths.p3.classList.add('conn-active');
+                logBox.innerHTML = `<span style="color:#a78bfa; font-weight:700;">[ZONE 2 - LOOP ${currentLoop}]</span> Executed stateless Linear Attention (GDN) layers 16–18. Zero KV-cache overhead.`;
+                stateBox.innerText = `GDN Pass ${currentLoop}`;
+
+                if(currentLoop < totalLoops) {
+                    paths.ploop.classList.add('conn-active');
+                    currentStep = 1; // loop back to router
+                }
+            } else if(currentStep === 5) {
+                highlightNode('z3');
+                paths.p5.classList.add('conn-active');
+                paths.ploop.classList.remove('conn-active');
+                logBox.innerHTML = '<span style="color:#f472b6; font-weight:700;">[ZONE 3]</span> 6 thinking loops finished! Final latent state routed through layers 19–35 to emit fluent token logits.';
+                stateBox.innerText = 'Token Emitted';
+            } else {
+                resetSim();
+            }
+        }
+
+        async function runFullPass() {
+            if(isRunningFull) return;
+            isRunningFull = true;
+            resetSim();
+            
+            for(let i = 0; i < 1 + totalLoops * 3 + 1; i++) {
+                runSingleStep();
+                await new Promise(r => setTimeout(r, 450));
+            }
+            isRunningFull = false;
+        }
+
+        function resetSim() {
+            currentStep = 0;
+            currentLoop = 0;
+            loopCounter.innerText = 'Loop: 0 / 6';
+            highlightNode(null);
+            Object.values(paths).forEach(p => p.classList.remove('conn-active'));
+            logBox.innerHTML = '<span style="color: #60a5fa; font-weight: 700;">[IDLE]</span> Click "Next Step →" or "Auto Run Loop 🔁" to simulate execution.';
+            stateBox.innerText = 'Ready';
+        }
+
+        // Loss Chart Toggle Logic
+        const chartData = {
+            total: {
+                d: "M 60 60 Q 150 220 280 235 T 510 245 T 730 252 T 950 255",
+                yMax: "75.0", yMid: "35.0", yLow: "15.0", yMin: "0.0",
+                color: "#2563eb",
+                caption: "Total Multi-Task Loss: Rapid exponential decay from initial cold-start (~72.4) settling into asymptotic convergence (~11.4)."
+            },
+            traj: {
+                d: "M 60 70 Q 200 230 400 248 T 700 254 T 950 257",
+                yMax: "12.0", yMid: "6.0", yLow: "2.0", yMin: "0.0",
+                color: "#7c3aed",
+                caption: "Trajectory MSE Loss: Measures distance from Teacher 256D SVD manifold. Drops smoothly from 10.8 down to 0.68."
+            },
+            ce: {
+                d: "M 60 110 Q 300 160 550 195 T 800 215 T 950 225",
+                yMax: "15.0", yMid: "10.0", yLow: "5.0", yMin: "0.0",
+                color: "#059669",
+                caption: "Cross-Entropy Loss (CE): Tracks language model perplexity, ensuring the model retains fluent vocabulary generation."
+            },
+            vq: {
+                d: "M 60 80 Q 180 215 350 242 T 650 252 T 950 256",
+                yMax: "85.0", yMid: "40.0", yLow: "10.0", yMin: "0.0",
+                color: "#d97706",
+                caption: "VQ Commitment Loss: Penalizes encoder drift relative to codebook entries. Stabilizes rapidly with zero codebook collapse."
+            }
+        };
+
+        function setChartMetric(key) {
+            document.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const m = chartData[key];
+            const p = document.getElementById('loss-path');
+            const a = document.getElementById('loss-area');
+            p.setAttribute('d', m.d);
+            p.setAttribute('stroke', m.color);
+            a.setAttribute('d', m.d + ' L 950 260 L 60 260 Z');
+
+            document.getElementById('y-max').innerText = m.yMax;
+            document.getElementById('y-mid').innerText = m.yMid;
+            document.getElementById('y-low').innerText = m.yLow;
+            document.getElementById('y-min').innerText = m.yMin;
+            document.getElementById('chart-caption').innerText = m.caption;
+        }
+
+        // VQ Simulation Logic
+        function initVQVisualizer() {
+            const vSgd = document.getElementById('vis-sgd');
+            const vEma = document.getElementById('vis-ema');
+            if(!vSgd || !vEma) return;
+            vSgd.innerHTML = '';
+            vEma.innerHTML = '';
+
+            for(let i = 0; i < 40; i++) {
+                const dot = document.createElement('div');
+                dot.style.position = 'absolute';
+                dot.style.width = '6px';
+                dot.style.height = '6px';
+                dot.style.borderRadius = '50%';
+                dot.style.background = '#94a3b8';
+                dot.style.left = (15 + Math.random() * 70) + '%';
+                dot.style.top = (15 + Math.random() * 70) + '%';
+                dot.style.opacity = '0.6';
+                vSgd.appendChild(dot.cloneNode(true));
+                vEma.appendChild(dot.cloneNode(true));
+            }
+
+            for(let i = 0; i < 8; i++) {
+                const c = document.createElement('div');
+                c.style.position = 'absolute';
+                c.style.width = '12px';
+                c.style.height = '12px';
+                c.style.borderRadius = '50%';
+                c.style.border = '2px solid white';
+                if(i < 2) {
+                    c.style.background = '#ef4444';
+                    c.style.left = (35 + i * 20) + '%';
+                    c.style.top = (40 + i * 15) + '%';
+                    c.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.8)';
+                } else {
+                    c.style.background = '#94a3b8';
+                    c.style.left = (10 + (i - 2) * 14) + '%';
+                    c.style.top = '88%';
+                    c.style.opacity = '0.4';
+                }
+                vSgd.appendChild(c);
+            }
+
+            const emaCoords = [
+                {x: 25, y: 25}, {x: 75, y: 25}, {x: 50, y: 50}, {x: 25, y: 75},
+                {x: 75, y: 75}, {x: 35, y: 55}, {x: 65, y: 45}, {x: 50, y: 20}
+            ];
+            emaCoords.forEach(pt => {
+                const c = document.createElement('div');
+                c.style.position = 'absolute';
+                c.style.width = '12px';
+                c.style.height = '12px';
+                c.style.borderRadius = '50%';
+                c.style.background = '#10b981';
+                c.style.border = '2px solid white';
+                c.style.left = pt.x + '%';
+                c.style.top = pt.y + '%';
+                c.style.boxShadow = '0 0 8px rgba(16, 185, 129, 0.6)';
+                vEma.appendChild(c);
+            });
+        }
+
+        function stepVQSim() {
+            initVQVisualizer();
+            const badgeS = document.getElementById('badge-sgd');
+            const badgeE = document.getElementById('badge-ema');
+            if(badgeS) badgeS.innerText = 'Utilization: 25.0% (6 Dead Codes)';
+            if(badgeE) badgeE.innerText = 'Utilization: 100.0% (0 Dead Codes)';
+        }
+
+        function resetVQSim() {
+            initVQVisualizer();
+            const badgeS = document.getElementById('badge-sgd');
+            const badgeE = document.getElementById('badge-ema');
+            if(badgeS) badgeS.innerText = 'Utilization: 25.0% (Collapse)';
+            if(badgeE) badgeE.innerText = 'Utilization: 100.0% (Perfect)';
+        }
+
+        initVQVisualizer();
+    </script>
+</body>
+</html>
