@@ -1990,6 +1990,55 @@ logits = self.lm_head(self.core.norm(h))</code></pre>
                 <br>
                 The flags <code>-d</code> (prevent display sleep), <code>-i</code> (prevent idle sleep), and <code>-s</code> (prevent system sleep) kept the M4 Pro awake and computing relentlessly.
             </p>
+
+            <h3>Chronicle 4: Summary of Core MLX Tensor Mechanics</h3>
+            <p>
+                To build an efficient neural architecture on Apple Silicon without writing custom C++ or Metal shaders, I composed MLX's high-level tensor engine to solve six critical mathematical challenges:
+            </p>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h4>1. Straight-Through Estimator (STE)</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Discrete codebook quantization (<code>mx.argmin</code>) has zero mathematical derivative. I used <code>z + mx.stop_gradient(z_q - z)</code> so the forward pass emits discrete cluster vectors while the backward pass treats quantization as an identity mapping ($\frac{\partial z_q}{\partial z} = 1$), allowing gradients to flow back into the 4D router.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h4>2. Functional Autodiff &amp; Parameter Isolation</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Unlike PyTorch's in-place <code>loss.backward()</code>, MLX compiles differentiation functionally via <code>nn.value_and_grad</code>. By passing strictly <code>model.trainable_parameters()</code> to the AdamW optimizer, I ensured momentum buffers were allocated only for the 21.66M router parameters, avoiding a 16 GB memory explosion across frozen base weights.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h4>3. Vectorized Distance Matrix Expansion</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Rather than using iterative loops to find the nearest cluster centroids, I expanded the Euclidean distance algebraically: $\|z - e_k\|^2 = \|z\|^2 + \|e_k\|^2 - 2 z e_k^\top$. This allowed the entire 4-head codebook assignment across thousands of tokens to execute as a single fused Metal matrix multiplication (<code>mx.matmul</code>).
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h4>4. Automatic Metal Shader Fusion</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Rather than writing manual Metal Shading Language (MSL) compute kernels, I chained high-level MLX operations (bounded $\tanh$, temperature-scaled sigmoid, RMSNorm scaling). MLX's graph compiler automatically fused these consecutive elementwise functions into single Metal GPU dispatches, eliminating intermediate buffer allocation.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h4>5. Zero-Copy Unified Memory Ingestion</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        Leveraging Apple Silicon's Unified Memory Architecture (UMA), pre-extracted teacher target tensors loaded from disk were mapped directly into <code>mx.array</code> without any PCI Express bus serialization overhead. The CPU deserializes target arrays and the Metal GPU immediately computes loss on the exact same physical RAM addresses.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h4>6. Dynamic Temperature Clamping</h4>
+                    <p style="font-size: 0.92rem; color: var(--text-muted); margin: 0;">
+                        To prevent numerical underflow and division-by-zero errors in the coordinate router's temperature scaling $\sigma(z / \tau)$, I clamped $\tau$ dynamically between $0.1$ and $10.0$ at every step. This preserved steep, distinct routing buckets at late training stages while keeping Metal shader gradients completely finite.
+                    </p>
+                </div>
+            </div>
         </section>
 
         <!-- CHAPTER 7 -->
