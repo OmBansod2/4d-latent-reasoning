@@ -73,7 +73,7 @@ This repository documents an intensive research exploration on **Apple Silicon (
                                       │  (Iterate 6 Loops)
                                       ▼
                   ┌─────────────────────────────────────────────────────────┐
-                  │         ZONE 3: UNEMBED (Layers 19 – 35, Frozen)        │
+                  │         ZONE 3: UNEMBED (Layers 19 – 31, Frozen)        │
                   │         Downstream Causal Decoding & Language Head      │
                   └───────────────────────────┬─────────────────────────────┘
                                               │
@@ -172,10 +172,6 @@ caffeinate -dis python pure_latent_4d_mind/train_hybrid_4d.py --start-chunk 10
 ├── .gitignore                         # Strict exclusion for weights, checkpoints, & caches
 ├── LICENSE                            # MIT License
 ├── README.md                          # Comprehensive technical documentation
-├── docs/
-│   └── index.html                     # Complete Interactive Research Blog (for GitHub Pages)
-├── blog/
-│   └── index.html                     # Local blog copy with interactive SVG simulation
 └── pure_latent_4d_mind/
     ├── requirements.txt               # Dependencies (mlx, mlx-lm, datasets, numpy)
     ├── compute_svd.py                 # SVD reduction from 5120D teacher to 256D basis
@@ -191,6 +187,8 @@ caffeinate -dis python pure_latent_4d_mind/train_hybrid_4d.py --start-chunk 10
     ├── download_qwen.py               # Qwen 27B teacher downloader
     └── download_qwen_4B.py            # Qwen 4B student downloader
 ```
+
+> The interactive research blog lives on the [`gh-pages`](https://github.com/OmBansod2/4d-latent-reasoning/tree/gh-pages) branch and is served at [ombansod2.github.io/4d-latent-reasoning](https://ombansod2.github.io/4d-latent-reasoning/).
 
 ---
 

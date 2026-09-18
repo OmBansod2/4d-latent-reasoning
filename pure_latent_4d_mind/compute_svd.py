@@ -117,14 +117,14 @@ def main():
     C_np = np.array(C)
     eigenvalues, eigenvectors = np.linalg.eigh(C_np)
     
-    # Extract top 256 eigenvectors (eigh returns ascending order)
-    top_indices = np.argsort(eigenvalues)[::-1][:256]
-    top_eigenvectors = eigenvectors[:, top_indices] # Shape: (embed_dim, 256)
+    # Extract top LATENT_DIM eigenvectors (eigh returns ascending order)
+    top_indices = np.argsort(eigenvalues)[::-1][:LATENT_DIM]
+    top_eigenvectors = eigenvectors[:, top_indices] # Shape: (embed_dim, LATENT_DIM)
     
     total_var = np.sum(np.abs(eigenvalues))  # Use abs for numerical safety
     top_var = np.sum(np.abs(eigenvalues[top_indices]))
     variance_retained = top_var / total_var
-    print(f"Variance retained by 256D projection: {variance_retained * 100:.2f}%")
+    print(f"Variance retained by {LATENT_DIM}D projection: {variance_retained * 100:.2f}%")
     
     # Save meta information for downstream scripts
     np.savez("svd_projection.npz",

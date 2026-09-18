@@ -100,9 +100,13 @@ class Hybrid4DQwen(nn.Module):
             safe_temp = mx.minimum(safe_temp, mx.array([10.0]))
             coord = mx.sigmoid(self.router(h_in) / safe_temp)
             
-            # Router Entropy Loss (encourage spread)
+            # Router Entropy Loss (encourage spread).
+            # The total loss is MINIMISED, so the entropy term must be negated for this
+            # to maximise entropy. Appending +entropy minimises it instead, driving the
+            # router to saturate at the hypercube corners -- the opposite of the intent,
+            # and the opposite of what train_4d_mind.py does.
             ent = -coord * mx.log(coord + 1e-6) - (1 - coord) * mx.log(1 - coord + 1e-6)
-            router_losses.append(mx.sum(ent, axis=-1))
+            router_losses.append(-mx.sum(ent, axis=-1))
             
             # FiLM Modulation (bounded with tanh to prevent activation explosion)
             gamma = 1.0 + 0.1 * mx.tanh(self.film_gamma(coord))
@@ -234,7 +238,13 @@ def main():
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--start-chunk", type=int, default=0, help="Chunk index to resume from")
+    parser.add_argument("--seed", type=int, default=0, help="RNG seed for batch shuffling and init (default: 0)")
     args = parser.parse_args()
+
+    # get_batches() shuffles with np.random.shuffle. Without a seed the batch order
+    # differs on every restart, which makes any failure impossible to reproduce.
+    np.random.seed(args.seed)
+    mx.random.seed(args.seed)
     
     print("Loading Base Student Model Qwen3.5-4B...")
     base_model, tokenizer = load("../Qwen3.5-4B")
@@ -259,8 +269,18 @@ def main():
         print(f"Resuming from chunk {args.start_chunk}! Loading hybrid_student_4d.safetensors...")
         model.load_weights("hybrid_student_4d.safetensors", strict=False)
     
-    param_count = sum(v.size for _, v in mlx.utils.tree_flatten(model.parameters()))
-    trainable_count = sum(v.size for _, v in mlx.utils.tree_flatten(model.trainable_parameters()))
+    # self.base and self.core alias the same submodule, so it appears twice in the
+    # parameter tree. Deduplicate by array identity or the total is ~2x the real count.
+    def _count_unique(tree):
+        seen, total = set(), 0
+        for _, v in mlx.utils.tree_flatten(tree):
+            if id(v) not in seen:
+                seen.add(id(v))
+                total += v.size
+        return total
+
+    param_count = _count_unique(model.parameters())
+    trainable_count = _count_unique(model.trainable_parameters())
     print(f"Total Parameters: {param_count / 1e6:.2f}M | Trainable: {trainable_count / 1e6:.2f}M")
     
     optimizer = optim.AdamW(learning_rate=3e-4)
@@ -303,7 +323,14 @@ def main():
             grads, grad_norm = clip_grad_norm(grads, max_norm=1.0)
             
             optimizer.update(model, grads)
-            mx.eval(model.parameters(), optimizer.state)
+            # The EMA buffers are underscore-prefixed, so model.parameters() does not
+            # reach them. Evaluate them explicitly so the lazy graph cannot accumulate.
+            mx.eval(
+                model.parameters(),
+                optimizer.state,
+                [vq._ema_cluster_sum for vq in model.vqs],
+                [vq._ema_cluster_count for vq in model.vqs],
+            )
             
             t1 = time.perf_counter()
             if step % 25 == 0:

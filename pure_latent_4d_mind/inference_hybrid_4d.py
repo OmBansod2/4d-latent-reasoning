@@ -44,7 +44,7 @@ def test_inference():
         tokens = mx.concatenate([tokens, mx.array([[next_token]])], axis=1)
         mx.eval(tokens)
         
-        if next_token in [tokenizer.eos_token_id, 151643, 151645]: 
+        if next_token == tokenizer.eos_token_id:
             break
 
     print("\n\n--- Inference Complete ---")

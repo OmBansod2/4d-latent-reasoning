@@ -3,3 +3,4 @@ mlx-lm
 datasets
 transformers
 numpy
+huggingface_hub

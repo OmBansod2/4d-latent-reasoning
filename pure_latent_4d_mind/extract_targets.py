@@ -4,8 +4,18 @@ from mlx_lm import load
 from datasets import load_dataset
 import numpy as np
 import gc
+import argparse
 
 def main():
+    # These were previously hardcoded to a mid-run resume point (skip 13000 / chunk 13),
+    # which silently skipped the first 13k examples for anyone following the README.
+    parser = argparse.ArgumentParser(description="JIT teacher trajectory extractor")
+    parser.add_argument("--skip", type=int, default=0, help="Examples to skip (resume point)")
+    parser.add_argument("--chunk-idx", type=int, default=0, help="Chunk index to start numbering from")
+    parser.add_argument("--max-prompts", type=int, default=17000, help="Stop after this many examples")
+    parser.add_argument("--chunk-size", type=int, default=1000, help="Examples per output chunk")
+    args = parser.parse_args()
+
     print("Loading projection matrix...")
     try:
         data = np.load("svd_projection.npz")
@@ -63,15 +73,38 @@ def main():
     extracted_targets = {i: [] for i in target_layers}
     saved_tokens = []
     
-    max_prompts = 17000
-    chunk_size = 1000
-    chunk_idx = 13
+    def flush_chunk():
+        nonlocal extracted_targets, saved_tokens, chunk_idx
+        import pickle
+        print(f"Saving extracted targets chunk {chunk_idx}...")
+        output_data = {
+            "layer_1": extracted_targets[target_layers[0]],
+            "layer_2": extracted_targets[target_layers[1]],
+            "layer_3": extracted_targets[target_layers[2]],
+            "layer_4": extracted_targets[target_layers[3]],
+            "tokens": saved_tokens,
+            "vocab_size": vocab_size,
+            "embed_dim": embed_dim
+        }
+        with open(f"teacher_256D_targets_chunk_{chunk_idx}.pkl", "wb") as f:
+            pickle.dump(output_data, f)
+        # Clear memory for next chunk
+        extracted_targets = {i: [] for i in target_layers}
+        saved_tokens = []
+        chunk_idx += 1
+        gc.collect()
+    
+    max_prompts = args.max_prompts
+    chunk_size = args.chunk_size
+    chunk_idx = args.chunk_idx
     
     print(f"Loading Bespoke-Stratos-17k dataset...")
-    dataset = load_dataset("bespokelabs/Bespoke-Stratos-17k", split="train", streaming=True).skip(13000)
+    dataset = load_dataset("bespokelabs/Bespoke-Stratos-17k", split="train", streaming=True)
+    if args.skip > 0:
+        dataset = dataset.skip(args.skip)
     
-    print(f"Processing {max_prompts} prompts for JIT target extraction in chunks of {chunk_size}...")
-    prompt_count = 13000
+    print(f"Processing up to {max_prompts} prompts for JIT target extraction in chunks of {chunk_size}...")
+    prompt_count = args.skip
     
     for row in dataset:
         if prompt_count >= max_prompts:
@@ -116,25 +149,14 @@ def main():
             
         # Save chunk and clear RAM
         if prompt_count % chunk_size == 0 or prompt_count == max_prompts:
-            import pickle
-            print(f"Saving extracted targets chunk {chunk_idx}...")
-            output_data = {
-                "layer_1": extracted_targets[target_layers[0]],
-                "layer_2": extracted_targets[target_layers[1]],
-                "layer_3": extracted_targets[target_layers[2]],
-                "layer_4": extracted_targets[target_layers[3]],
-                "tokens": saved_tokens,
-                "vocab_size": vocab_size,
-                "embed_dim": embed_dim
-            }
-            with open(f"teacher_256D_targets_chunk_{chunk_idx}.pkl", "wb") as f:
-                pickle.dump(output_data, f)
-                
-            # Clear memory for next chunk
-            extracted_targets = {i: [] for i in target_layers}
-            saved_tokens = []
-            chunk_idx += 1
-            gc.collect()
+            flush_chunk()
+    
+    # Bespoke-Stratos-17k holds ~16.7k usable rows, so the loop above exhausts the
+    # dataset before prompt_count reaches a chunk_size multiple. Without this final
+    # flush the trailing partial chunk was silently discarded.
+    if saved_tokens:
+        print(f"Flushing final partial chunk ({len(saved_tokens)} examples)...")
+        flush_chunk()
              
     print(f"Extraction complete. Saved {prompt_count} prompts. Process terminates to release all RAM.")
 

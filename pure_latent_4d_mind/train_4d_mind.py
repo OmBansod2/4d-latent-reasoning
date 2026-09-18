@@ -47,11 +47,16 @@ class GroupedVectorQuantizer(nn.Module):
         scale = 1.0 / (self.head_dim ** 0.5)
         self.codebooks = scale * mx.random.normal([num_heads, num_embeddings, self.head_dim])
         
-        # EMA tracking buffers (not trainable parameters)
-        # Running sum of assigned vectors per code
-        self._ema_cluster_sum = mx.zeros([num_heads, num_embeddings, self.head_dim])
+        # EMA tracking buffers (not trainable parameters).
+        # These MUST be seeded consistently with the initial codebook. _ema_update
+        # rewrites codebooks as (sum / count), so starting from sum=0 / count~0 makes
+        # every code that receives no assignment on step 1 evaluate to 0 / 1e-5 = 0,
+        # collapsing the whole codebook onto the zero vector and discarding the
+        # 1/sqrt(head_dim) init. Seeding sum = codebooks * count makes step 0 an identity.
         # Running count of assignments per code
-        self._ema_cluster_count = mx.ones([num_heads, num_embeddings]) * 1e-5
+        self._ema_cluster_count = mx.ones([num_heads, num_embeddings])
+        # Running sum of assigned vectors per code
+        self._ema_cluster_sum = self.codebooks * mx.expand_dims(self._ema_cluster_count, -1)
         # Total calls for dead code detection
         self._total_calls = 0
         # Track utilization for logging
@@ -106,35 +111,36 @@ class GroupedVectorQuantizer(nn.Module):
         actual data distribution instead of clumping at the centroid."""
         DEAD_THRESHOLD = 1.0
         
+        # NOTE: the update below is fully masked, so it is a no-op when nothing is
+        # dead. That lets us drop the `int(mx.sum(...).item())` guard, which forced a
+        # synchronous GPU->CPU roundtrip inside the forward pass on every invocation.
         for head_idx in range(self.num_heads):
             head_counts = self._ema_cluster_count[head_idx]  # (K,)
             dead_mask = head_counts < DEAD_THRESHOLD
-            num_dead = int(mx.sum(dead_mask.astype(mx.float32)).item())
             
-            if num_dead > 0:
-                head_vectors = x_flat[:, head_idx, :]  # (N, d)
-                N = head_vectors.shape[0]
-                
-                # Sample random individual vectors from the batch for each dead code
-                # This scatters replacements across the data manifold
-                sample_indices = mx.random.randint(0, N, [self.num_embeddings])
-                sampled = head_vectors[sample_indices]  # (K, d)
-                noise = 0.01 * mx.random.normal([self.num_embeddings, self.head_dim])
-                replacement = sampled + noise  # (K, d)
-                
-                # Only replace where dead
-                dead_mask_f = dead_mask.astype(mx.float32)
-                dead_mask_expanded = mx.expand_dims(dead_mask_f, -1)  # (K, 1)
-                self.codebooks = self.codebooks.at[head_idx].add(
-                    dead_mask_expanded * (replacement - self.codebooks[head_idx])
-                )
-                # Reset EMA counts and sums for replaced codes so subsequent EMA updates preserve them
-                self._ema_cluster_count = self._ema_cluster_count.at[head_idx].add(
-                    dead_mask_f * (1.0 - self._ema_cluster_count[head_idx])
-                )
-                self._ema_cluster_sum = self._ema_cluster_sum.at[head_idx].add(
-                    dead_mask_expanded * (replacement - self._ema_cluster_sum[head_idx])
-                )
+            head_vectors = x_flat[:, head_idx, :]  # (N, d)
+            N = head_vectors.shape[0]
+            
+            # Sample random individual vectors from the batch for each dead code
+            # This scatters replacements across the data manifold
+            sample_indices = mx.random.randint(0, N, [self.num_embeddings])
+            sampled = head_vectors[sample_indices]  # (K, d)
+            noise = 0.01 * mx.random.normal([self.num_embeddings, self.head_dim])
+            replacement = sampled + noise  # (K, d)
+            
+            # Only replace where dead
+            dead_mask_f = dead_mask.astype(mx.float32)
+            dead_mask_expanded = mx.expand_dims(dead_mask_f, -1)  # (K, 1)
+            self.codebooks = self.codebooks.at[head_idx].add(
+                dead_mask_expanded * (replacement - self.codebooks[head_idx])
+            )
+            # Reset EMA counts and sums for replaced codes so subsequent EMA updates preserve them
+            self._ema_cluster_count = self._ema_cluster_count.at[head_idx].add(
+                dead_mask_f * (1.0 - self._ema_cluster_count[head_idx])
+            )
+            self._ema_cluster_sum = self._ema_cluster_sum.at[head_idx].add(
+                dead_mask_expanded * (replacement - self._ema_cluster_sum[head_idx])
+            )
         
     def __call__(self, x, training=True):
         B, L, D = x.shape
@@ -466,8 +472,12 @@ def clip_grad_norm(grads, max_norm=1.0):
         grads
     )
     flat_grads = mlx.utils.tree_flatten(grads)
-    total_norm_sq = sum(mx.sum(g ** 2).item() for _, g in flat_grads)
-    total_norm = total_norm_sq ** 0.5
+    # Accumulate on-device and synchronise exactly once. Calling .item() per gradient
+    # tensor issued one blocking GPU->CPU roundtrip per parameter, every step.
+    total_norm_sq = mx.array(0.0)
+    for _, g in flat_grads:
+        total_norm_sq = total_norm_sq + mx.sum(g ** 2)
+    total_norm = float(mx.sqrt(total_norm_sq).item())
     
     if total_norm > max_norm or not np.isfinite(total_norm):
         scale = max_norm / (total_norm + 1e-6)
@@ -486,7 +496,13 @@ def main():
     parser.add_argument("--end-chunk", type=int, default=15, help="Last chunk index to train (default: 15)")
     parser.add_argument("--batch-size", type=int, default=2, help="Batch size (default: 2)")
     parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate (default: 3e-4)")
+    parser.add_argument("--seed", type=int, default=0, help="RNG seed for batch shuffling and init (default: 0)")
     args = parser.parse_args()
+
+    # get_batches() shuffles with np.random.shuffle. Without a seed the batch order
+    # differs on every restart, which makes any failure impossible to reproduce.
+    np.random.seed(args.seed)
+    mx.random.seed(args.seed)
 
     # Discover and sort available chunks
     chunk_pattern = "teacher_256D_targets_chunk_*.pkl"
