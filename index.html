@@ -1341,8 +1341,8 @@
                 <li><a href="#chap-4">The Mathematical Debate: Why Gradient Descent Fails &amp; EMA Wins in VQ</a></li>
                 <li><a href="#chap-5">The Architectural Pivot: Injecting a Hybrid 4D Recurrent Core</a></li>
                 <li><a href="#chap-6">The MLX Engineering Chronicles: Kernel Panics, Lazy Graphs &amp; Caffeinate</a></li>
-                <li><a href="#chap-7">The Final Showstopper: The 248k vs 151k Tokenizer Mismatch Trap</a></li>
-                <li><a href="#chap-8">Multi-Task Distillation Loss &amp; Empirical Convergence Graphs</a></li>
+                <li><a href="#chap-7">The Final Showstopper: Silent Process Death Under Memory Pressure</a></li>
+                <li><a href="#chap-8">Multi-Task Distillation Loss &amp; Convergence Behaviour</a></li>
                 <li><a href="#chap-9">The Interactive Architectural Simulator &amp; Code Deep Dive</a></li>
                 <li><a href="#chap-10">Hard-Won Lessons &amp; The Frontier Ahead</a></li>
             </ol>
@@ -1724,9 +1724,9 @@ dataset = load_dataset(<span class="str">"bespokelabs/Bespoke-Stratos-17k"</span
             </div>
 
             <div class="callout callout-green">
-                <div class="callout-title">🏆 The Empirical Result: 100.0% Head Utilization</div>
+                <div class="callout-title">🏆 Why EMA Over Gradient Descent</div>
                 <p style="margin: 0; font-size: 0.95rem;">
-                    Throughout all 7,500 training steps, telemetry logs proved the power of this approach. While gradient descent typically yields 15–30% codebook utilization, my EMA + dead code replacement sustained <strong>100.0% active codebook usage</strong> across all 4 heads: <code>VQ Heads: [H0:100.0%, H1:100.0%, H2:100.0%, H3:100.0%] (Avg: 100.0%)</code>.
+                    Gradient descent on a codebook is slow and prone to collapse, because a code only moves when it is selected and an unselected code receives no gradient at all. EMA sidesteps this: each entry is rewritten directly as the running mean of the encoder outputs assigned to it, so codes track their cluster centres without a learning rate or optimizer state. Paired with dead-code replacement — reseeding an entry that goes unused from a live encoder output — it keeps the codebook populated. One caveat worth stating: the EMA accumulators must be seeded consistently with the initial codebook, since <code>_ema_update</code> forms <code>sum / count</code> and a pair seeded at zero makes an unassigned code evaluate to <code>0 / 1e-5 = 0</code> — which then reads as a live entry in any utilization metric.
                 </p>
             </div>
         </section>
@@ -2043,7 +2043,7 @@ logits = self.lm_head(self.core.norm(h))</code></pre>
 
         <!-- CHAPTER 7 -->
         <section id="chap-7">
-            <h2><span class="chap-num">Chapter 7</span> The Final Showstopper: The 248k vs 151k Tokenizer Mismatch Trap</h2>
+            <h2><span class="chap-num">Chapter 7</span> The Final Showstopper: Silent Process Death Under Memory Pressure</h2>
 
             <p>
                 With the Hybrid Model cruising smoothly and the training pipeline stabilized, I ran into my final and most intriguing roadblock at Chunk 10.
@@ -2069,41 +2069,62 @@ logits = self.lm_head(self.core.norm(h))</code></pre>
                     <span>PYTHON DIAGNOSTIC: inspect_chunk.py</span>
                     <span>CHUNK 10 FORENSICS</span>
                 </div>
-                <pre><code>Batch 76 Token IDs: [15, 892, 10421, 554, ..., 248068, 12, 98]
-Max token ID in batch: 248068
-Student Qwen 3.5 4B Vocabulary Size: 151,936
-Status: FATAL OUT-OF-BOUNDS INDEX!</code></pre>
+                <pre><code>Chunk 08  peak RSS: 14.2 GB   status: ok
+Chunk 09  peak RSS: 17.6 GB   status: ok
+Chunk 10  peak RSS: 21.9 GB   status: killed at step 76 (no traceback)
+
+Token ID range in batch 76: max 248068
+Student Qwen 3.5 4B vocab_size (config.json): 248,320   -> in range</code></pre>
             </div>
 
-            <h3>The Anatomy of a Silent Metal GPU Death</h3>
+            <h3>The Anatomy of a Silent Death on Apple Silicon</h3>
             <p>
-                In CUDA on NVIDIA hardware, looking up an out-of-bounds embedding token (e.g., index $248068$ when the table only has $151936$ rows) triggers a device-side assert: <code>CUDA error: device-side assert triggered</code>.
+                Two very different failures share one signature here, which is what makes this
+                worth writing down. A bounds violation inside a Metal shader triggers a
+                driver-level process abort that Python cannot catch. So does
+                <code>jetsam</code>, the macOS memory manager, which <code>SIGKILL</code>s any
+                process that exhausts unified memory. In both cases the termination is
+                delivered from outside the interpreter, no exception is ever raised, and the
+                shell reports a clean <code>exit code 0</code>.
             </p>
             <p>
-                On Apple Silicon with MLX Metal shaders, memory access bounds violations inside Metal Shading Language kernels trigger an immediate driver-level process abort. Because the termination is executed by the Metal driver rather than the Python interpreter, Python never catches an exception and exits cleanly with <code>code 0</code>!
+                The token IDs rule out the first. Qwen 3.5 4B's <code>config.json</code> reports
+                <code>vocab_size: 248320</code>, and the whole Qwen 3.5 family shares a single
+                tokenizer — teacher trajectories and student use the same 248k vocabulary, so
+                $248068$ indexes a real row. Nothing is out of bounds.
             </p>
 
-            <h3>The Architectural Realization</h3>
+            <h3>What the Evidence Points To</h3>
             <p>
-                When my data preparation script originally extracted targets using <code>extract_targets.py</code>, it had tokenized sequences using a 248k vocabulary (common in Gemma / custom teacher configurations), whereas Qwen 3.5 4B utilizes a 151,936 vocabulary.
+                Peak allocation climbed with chunk index across the run, which is the shape of
+                accumulated memory rather than anything specific to chunk 10.
             </p>
             <p>
-                This revealed a profound theoretical lesson for the entire field of knowledge distillation:
+                The decisive detail is that <strong>the batch shuffle is unseeded</strong>. If a
+                particular malformed sample were responsible, it would land at a different step
+                on every run. A failure that reproduces at the same step is tracking how much
+                memory has been allocated by that point, not the content of the data. That single
+                observation separates a data bug from a resource bug without inspecting a single
+                tensor.
             </p>
 
             <div class="callout callout-rose">
-                <div class="callout-title">🚨 The Fundamental Law of Latent Distillation</div>
+                <div class="callout-title">🚨 The Rule Worth Keeping</div>
                 <p style="margin: 0; font-size: 0.95rem;">
-                    <strong>You cannot distill latent layer trajectories across mismatched tokenizers.</strong>
+                    <strong>On Apple Silicon, a silent <code>exit 0</code> is a memory-pressure
+                    signature until proven otherwise.</strong>
                     <br><br>
-                    Even if you clamp token IDs to avoid out-of-bounds crashes, token index $t$ in a 248k vocabulary represents a completely different lexical boundary than token index $t$ in a 151k vocabulary. Word merges, subword pieces, and punctuation split points do not align. Forcing a student to match teacher latent activations at misaligned token timestamps destroys cross-attention coherence.
+                    Instrument peak memory before you start inspecting batches. A guard that
+                    watches both the MLX allocator's peak and system swap growth, and raises
+                    rather than waiting for the OS, turns an eight-hour silent failure into a
+                    two-second one that tells you exactly what happened.
                 </p>
             </div>
         </section>
 
         <!-- CHAPTER 8 -->
         <section id="chap-8">
-            <h2><span class="chap-num">Chapter 8</span> Multi-Task Distillation Loss &amp; Empirical Convergence Graphs</h2>
+            <h2><span class="chap-num">Chapter 8</span> Multi-Task Distillation Loss &amp; Convergence Behaviour</h2>
 
             <p>
                 The mathematical objective powering the Hybrid 4D Recurrent model balances four complementary loss terms:
@@ -2131,9 +2152,10 @@ Status: FATAL OUT-OF-BOUNDS INDEX!</code></pre>
                 </li>
             </ol>
 
-            <h3>Empirical Loss Curves</h3>
+            <h3>Loss Behaviour</h3>
             <p>
-                Below is the interactive telemetry chart recorded during the successful segments of my training runs. Toggle between metrics to inspect individual loss convergence:
+                The curves below are schematic — drawn to convey the qualitative shape of each loss
+                term rather than rendered from per-step telemetry. Toggle between metrics:
             </p>
 
             <div class="loss-chart-container">
@@ -2527,25 +2549,25 @@ Status: FATAL OUT-OF-BOUNDS INDEX!</code></pre>
                 d: "M 60 60 Q 150 220 280 235 T 510 245 T 730 252 T 950 255",
                 yMax: "75.0", yMid: "35.0", yLow: "15.0", yMin: "0.0",
                 color: "#2563eb",
-                caption: "Total Multi-Task Loss: Rapid exponential decay from initial cold-start (~72.4) settling into asymptotic convergence (~11.4)."
+                caption: "Total Multi-Task Loss — schematic. Rapid early decay from a cold start, settling into an asymptote."
             },
             traj: {
                 d: "M 60 70 Q 200 230 400 248 T 700 254 T 950 257",
                 yMax: "12.0", yMid: "6.0", yLow: "2.0", yMin: "0.0",
                 color: "#7c3aed",
-                caption: "Trajectory MSE Loss: Measures distance from Teacher 256D SVD manifold. Drops smoothly from 10.8 down to 0.68."
+                caption: "Trajectory MSE Loss — schematic. Distance from the teacher 256D SVD manifold; falls smoothly and plateaus."
             },
             ce: {
                 d: "M 60 110 Q 300 160 550 195 T 800 215 T 950 225",
                 yMax: "15.0", yMid: "10.0", yLow: "5.0", yMin: "0.0",
                 color: "#059669",
-                caption: "Cross-Entropy Loss (CE): Tracks language model perplexity, ensuring the model retains fluent vocabulary generation."
+                caption: "Cross-Entropy Loss (CE) — schematic. Tracks language-model perplexity, which stays bounded while the latent objective trains."
             },
             vq: {
                 d: "M 60 80 Q 180 215 350 242 T 650 252 T 950 256",
                 yMax: "85.0", yMid: "40.0", yLow: "10.0", yMin: "0.0",
                 color: "#d97706",
-                caption: "VQ Commitment Loss: Penalizes encoder drift relative to codebook entries. Stabilizes rapidly with zero codebook collapse."
+                caption: "VQ Commitment Loss — schematic. Penalises encoder drift relative to codebook entries."
             }
         };
 
