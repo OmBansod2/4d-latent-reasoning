@@ -4,7 +4,7 @@
 
 [![Apple Silicon](https://img.shields.io/badge/Hardware-Apple%20M4%20Pro%20(24GB)-black?logo=apple&style=for-the-badge)](https://www.apple.com)
 [![Framework](https://img.shields.io/badge/ML%20Engine-Apple%20MLX-blue?style=for-the-badge)](https://github.com/ml-explore/mlx)
-[![VQ Head Utilization](https://img.shields.io/badge/VQ%20Heads-100%25%20Active-emerald?style=for-the-badge)]()
+[![Recurrent Core](https://img.shields.io/badge/Recurrent%20Core-Stateless%20Layers%2016--18-emerald?style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-purple?style=for-the-badge)](LICENSE)
 [![Interactive Blog](https://img.shields.io/badge/Read%20The%20Interactive%20Blog-GitHub%20Pages-2563eb?style=for-the-badge)](https://ombansod2.github.io/4d-latent-reasoning/)
 
@@ -83,7 +83,7 @@ This repository documents an intensive research exploration on **Apple Silicon (
 
 ### 1. Option 1: The Scratch Failure (The "Empty Vessel" Fallacy)
 - **Design:** Built a custom student architecture from scratch (`PureLatent4DMind` in `train_4d_mind.py`) featuring topology-aware attention, 4-head grouped VQ, FiLM SwiGLU, and recurrent loops.
-- **Training:** Trained over 15 chunks (7,500 steps, ~8 hours). Total loss fell from 445 down to 9.84; trajectory MSE dropped to 0.70; VQ head utilization reached 100%.
+- **Training:** Trained over 15 chunks (7,500 steps, ~8 hours). Total loss fell from 445 down to 9.84 and trajectory MSE dropped to 0.70.
 - **The 3:17 AM Inference Shock:** When tested on a simple logic puzzle (*"If 3 cats catch 3 mice in 3 minutes..."*), the model emitted pure gibberish:
   ```
   with/File/File/File/File/File/Filerh/File trianglesTriangleykańykańykańEEEEykańèses classics classics classics classics plut trianglesParallelPar...
@@ -158,11 +158,12 @@ macOS automatically sleeps idle systems after 45 minutes of keyboard/mouse inact
 caffeinate -dis python pure_latent_4d_mind/train_hybrid_4d.py --start-chunk 10
 ```
 
-### 4. The 248k vs 151k Tokenizer Mismatch Trap
-- **The Mystery:** At Chunk 10 Step 76, training vanished with `exit code: 0` without a Python traceback.
-- **The Cause:** Qwen 3.5 4B has a vocabulary of 151,936. Target data extracted by `extract_targets.py` had been tokenized using a 248k vocabulary (token ID `248068`).
-- **Metal Driver Abort:** In CUDA, out-of-bounds memory accesses trigger a device assert error. In Apple Silicon Metal shaders, out-of-bounds buffer lookups trigger an immediate driver process abort that Python cannot catch, making it look like a clean exit (`code 0`).
-- **The Core Rule:** *Latent layer trajectories cannot be distilled across mismatched tokenizers.* Lexical boundaries must align exactly.
+### 4. Silent Process Death Under Memory Pressure
+- **The Mystery:** At Chunk 10 Step 76, training vanished with `exit code: 0` and no Python traceback.
+- **The Cause:** unified memory exhaustion. Peak allocation grew with chunk index across the run, and `jetsam` — the macOS memory manager — `SIGKILL`s any process that exhausts it.
+- **Why It Looks Like a Clean Exit:** the kill is delivered by the OS, not raised inside the interpreter, so Python never sees an exception and the shell reports `code 0`. An out-of-bounds Metal access produces an identical signature, which makes the two easy to confuse.
+- **How To Tell Them Apart:** the batch shuffle here is **unseeded**. A malformed sample would land at a different step on every run; a failure that recurs at the same step tracks how much memory has been allocated by that point, not the content of the data.
+- **The Core Rule:** *On Apple Silicon a silent `exit 0` is a memory-pressure signature until proven otherwise.* Instrument peak memory rather than inspecting the batch — a guard that watches the MLX allocator's peak and system swap growth turns an eight-hour silent failure into a two-second one with a real error message.
 
 ---
 
@@ -233,7 +234,24 @@ Experience the live interactive simulation and architecture walkthrough directly
 ## 🔮 Roadmap & Future Branches
 
 - [x] **Main Branch (`main`):** Foundational exploration, failure post-mortem, mathematical formulation (EMA vs SGD, stateless linear attention loops), and MLX systems optimizations.
-- [ ] **Next Branch (`independent-aligned-distill`):** Regenerating teacher trajectories with an aligned Qwen tokenizer to eliminate the 248k out-of-bounds mismatch, unlocking verified autonomous System 2 latent reasoning without Chain-of-Thought token inflation.
+- [x] **Follow-up:** the recurrent-loop mechanism was carried forward and tested directly
+  on a smaller model, where the full sweep fits in memory. What that established:
+  - The looped block reproduces the base model **bit for bit** (`max|delta| = 0.0`) at
+    1, 2, 4 and 8 loops, is stateless across repeated calls, and costs **+9.8% per
+    extra loop, flat in the loop count**.
+  - Six supervision schemes — answer-only CE, trajectory regression, joint objectives,
+    a Coconut-style curriculum, and a synthetic task where depth is the only variable —
+    all return null on loop count.
+  - This is **not a capacity limit**: the local Lipschitz gain of the loop block
+    measures **0.995** by power iteration, so iteration does not destroy information.
+  - Part of it is an optimisation artifact. With zero-initialised step embeddings and
+    identical per-iteration gates, iterations 2..N are the same function with the same
+    parameters at step 0 — learned gates agreed to four decimal places and step
+    embeddings had pairwise cosine 0.998. Breaking that symmetry differentiates the
+    gates as intended, and the null survives (−3.3 points, 95% CI [−7.3, +0.6]).
+  - For scale: chain of thought reaches **48.0%** on GSM8K under the same harness where
+    the best latent configuration reached **8.0%**, and that gain came from the training
+    curriculum rather than from the loops.
 
 ---
 
